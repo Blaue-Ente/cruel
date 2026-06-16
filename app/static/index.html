@@ -21,6 +21,9 @@
       <button class="nav-item" data-page="vision"><span class="nav-icon">👁</span><span>Vision Scrape</span></button>
       <button class="nav-item" data-page="predictive"><span class="nav-icon">🔮</span><span>Predictive</span></button>
       <button class="nav-item" data-page="probe"><span class="nav-icon">🎯</span><span>Active Probe</span></button>
+      <button class="nav-item" data-page="tiktok"><span class="nav-icon">🎵</span><span>TikTok Multimodal</span></button>
+      <button class="nav-item" data-page="inbox"><span class="nav-icon">📬</span><span>Inbox / Forms</span></button>
+      <button class="nav-item" data-page="stockargos"><span class="nav-icon">📈</span><span>StockArgos</span></button>
       <button class="nav-item" data-page="keys"><span class="nav-icon">🔑</span><span>API Ключове</span></button>
       <button class="nav-item" data-page="settings"><span class="nav-icon">⚙️</span><span>Настройки</span></button>
     </nav>
@@ -33,7 +36,7 @@
     <header class="topbar">
       <h2 id="page-title">Dashboard</h2>
       <div class="topbar-actions">
-        <span class="badge badge-green">v4.0</span>
+        <span class="badge badge-green">v5.0</span>
       </div>
     </header>
 
@@ -306,11 +309,89 @@
               <input type="checkbox" id="probe-dry-run" checked />
               <label for="probe-dry-run" style="margin:0">Dry run (conversational — не изпраща форми)</label>
             </div>
+            <div class="toggle-row">
+              <input type="checkbox" id="probe-stockargos" />
+              <label for="probe-stockargos" style="margin:0">Emit StockArgos signal след probe</label>
+            </div>
+            <div id="probe-backend" class="alert alert-info" style="margin-top:.5rem">Pheromone backend: —</div>
             <div class="row">
               <button class="btn btn-primary" id="btn-probe-run">Стартирай Probe</button>
               <button class="btn btn-secondary" id="btn-probe-pheromones">Pheromones</button>
             </div>
             <pre id="probe-result" class="json-view" style="margin-top:1rem;max-height:420px">// Probe results</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- TIKTOK MULTIMODAL -->
+      <section id="page-tiktok" class="page">
+        <div class="card">
+          <div class="card-header">🎵 TikTok Multimodal Analysis</div>
+          <div class="card-body">
+            <div class="alert alert-info">
+              Vision frames + audio tone heuristics + LLM synthesis. Изисква Playwright Chromium.
+              Анализира credibility, luxury/stress signals, hashtags.
+            </div>
+            <label>TikTok URL</label>
+            <input type="url" id="tiktok-url" placeholder="https://www.tiktok.com/@user/video/..." />
+            <button class="btn btn-primary" id="btn-tiktok-analyze">Анализирай</button>
+            <pre id="tiktok-result" class="json-view" style="margin-top:1rem;max-height:480px">// Multimodal result</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- INBOX -->
+      <section id="page-inbox" class="page">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">📬 Inbox / Form Responses</div>
+            <div class="card-body">
+              <p style="color:var(--muted);font-size:.84rem;margin-bottom:1rem">
+                IMAP polling за реални имейл отговори от conversational probe submissions.
+                Конфигурирайте IMAP_* в .env и INBOX_ENABLED=true.
+              </p>
+              <div id="inbox-status" class="alert alert-info">Статус...</div>
+              <div class="row">
+                <button class="btn btn-primary" id="btn-inbox-poll">Poll Inbox</button>
+                <button class="btn btn-secondary" id="btn-inbox-refresh">Refresh</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">Submissions & Messages</div>
+            <div class="card-body">
+              <pre id="inbox-data" class="json-view" style="max-height:420px">// Submissions and messages</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STOCKARGOS -->
+      <section id="page-stockargos" class="page">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">📈 StockArgos Signals</div>
+            <div class="card-body">
+              <p style="color:var(--muted);font-size:.84rem;margin-bottom:1rem">
+                EES score + webhook към StockArgos. Конфигурирайте STOCKARGOS_WEBHOOK_URL в .env.
+              </p>
+              <label>Signal Type</label>
+              <input type="text" id="sa-type" value="manual" />
+              <label>Title</label>
+              <input type="text" id="sa-title" placeholder="Market signal title" />
+              <label>Content</label>
+              <textarea id="sa-content" placeholder="Signal content..."></textarea>
+              <label>Source URL</label>
+              <input type="url" id="sa-url" placeholder="https://..." />
+              <button class="btn btn-primary" id="btn-sa-emit">Emit Signal</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">Recent Signals</div>
+            <div class="card-body">
+              <button class="btn btn-secondary" id="btn-sa-list" style="margin-bottom:.75rem">Load Signals</button>
+              <pre id="sa-result" class="json-view" style="max-height:420px">// StockArgos signals</pre>
+            </div>
           </div>
         </div>
       </section>

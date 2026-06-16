@@ -15,6 +15,13 @@ try:
 except ImportError:
     pass
 
+try:
+    from app.inbox import register_submission
+    from app.config import IMAP_USER
+except ImportError:
+    register_submission = None  # type: ignore
+    IMAP_USER = ""
+
 
 def generate_inquiry(goal: str, language: str = "auto", provider: Optional[str] = None) -> str:
     lang_hint = language if language != "auto" else ("Bulgarian" if any(c in goal for c in "абвгдежзийклмнопрстуфхцчшщъьюя") else "English")
@@ -104,7 +111,12 @@ def conversational_scrape(
 
             browser.close()
 
-        return {
+        submission_id = None
+        if not dry_run and register_submission:
+            probe_email = IMAP_USER or "research@argoscout.local"
+            submission_id = register_submission(url, inquiry, probe_email)
+
+        result = {
             "url": url,
             "success": True,
             "method": "conversational",
@@ -114,5 +126,9 @@ def conversational_scrape(
             "chat_widgets": chat_found,
             "responses": responses,
         }
+        if submission_id:
+            result["submission_id"] = submission_id
+            result["inbox_tracking"] = True
+        return result
     except Exception as e:
         return {"url": url, "success": False, "method": "conversational", "error": str(e), "generated_inquiry": inquiry}

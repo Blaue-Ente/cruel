@@ -144,6 +144,21 @@ class ProbeRequest(BaseModel):
     temporal_offset_days: int = 1
     swarm_workers: int = Field(default=5, ge=1, le=10)
     llm_provider: Optional[str] = None
+    emit_stockargos: bool = False
+
+
+class TikTokAnalyzeRequest(BaseModel):
+    url: HttpUrl
+    llm_provider: Optional[str] = None
+
+
+class StockArgosSignalRequest(BaseModel):
+    signal_type: str = "manual"
+    title: str
+    content: str
+    source_url: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    auto_deliver: bool = True
 
 
 class ChatResponse(BaseModel):

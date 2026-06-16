@@ -34,6 +34,8 @@ function showPage(id) {
   if (id === "keys") loadKeys();
   if (id === "predictive") loadPredictiveStats();
   if (id === "probe") loadProbeCapabilities();
+  if (id === "inbox") loadInboxData();
+  if (id === "stockargos") loadStockArgosSignals();
 }
 
 async function loadHealth() {
@@ -363,6 +365,8 @@ async function loadProbeCapabilities() {
   try {
     const r = await fetch("/api/v1/probe/capabilities");
     const d = await r.json();
+    const backend = d.pheromones?.backend || "sqlite";
+    $("probe-backend").textContent = `Pheromone backend: ${backend} (Redis: ${d.pheromones?.redis_url_configured ? "configured" : "not set"})`;
     $("probe-result").textContent = JSON.stringify(d, null, 2);
   } catch {}
 }
@@ -381,6 +385,7 @@ async function runProbe() {
         url, modes,
         goal: $("probe-goal").value.trim(),
         dry_run: $("probe-dry-run").checked,
+        emit_stockargos: $("probe-stockargos").checked,
         llm_provider: state.llmProvider !== "auto" ? state.llmProvider : null,
       }),
     });
@@ -396,6 +401,82 @@ async function loadPheromones() {
   const r = await fetch("/api/v1/probe/pheromones", { headers: authHeaders() });
   const d = await r.json();
   $("probe-result").textContent = JSON.stringify(d, null, 2);
+}
+
+async function runTikTokAnalyze() {
+  if (!state.apiKey) return alert("Въведете API ключ");
+  const url = $("tiktok-url").value.trim();
+  if (!url) return;
+  $("tiktok-result").textContent = "Analyzing TikTok (vision + audio)...";
+  try {
+    const r = await fetch("/api/v1/multimodal/tiktok", {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({
+        url,
+        llm_provider: state.llmProvider !== "auto" ? state.llmProvider : null,
+      }),
+    });
+    const d = await r.json();
+    $("tiktok-result").textContent = JSON.stringify(d, null, 2);
+  } catch (e) {
+    $("tiktok-result").textContent = "Error: " + e.message;
+  }
+}
+
+async function loadInboxData() {
+  if (!state.apiKey) return;
+  try {
+    const [statusR, subR] = await Promise.all([
+      fetch("/api/v1/inbox/status", { headers: authHeaders() }),
+      fetch("/api/v1/inbox/submissions?limit=10", { headers: authHeaders() }),
+    ]);
+    const status = await statusR.json();
+    const subs = await subR.json();
+    $("inbox-status").textContent = status.enabled
+      ? `Enabled · Pending: ${status.pending_submissions} · Replied: ${status.replied_submissions} · Messages: ${status.total_messages}`
+      : `Disabled — configure IMAP_* and INBOX_ENABLED=true`;
+    $("inbox-data").textContent = JSON.stringify({ status, submissions: subs.submissions }, null, 2);
+  } catch (e) {
+    $("inbox-data").textContent = "Error: " + e.message;
+  }
+}
+
+async function pollInbox() {
+  if (!state.apiKey) return alert("Въведете API ключ");
+  $("inbox-status").textContent = "Polling inbox...";
+  const r = await fetch("/api/v1/inbox/poll", { method: "POST", headers: authHeaders() });
+  const d = await r.json();
+  $("inbox-status").textContent = JSON.stringify(d);
+  loadInboxData();
+}
+
+async function emitStockArgosSignal() {
+  if (!state.apiKey) return alert("Въведете API ключ");
+  const title = $("sa-title").value.trim();
+  const content = $("sa-content").value.trim();
+  if (!title || !content) return alert("Title и content са задължителни");
+  $("sa-result").textContent = "Emitting signal...";
+  const r = await fetch("/api/v1/integrations/stockargos/signal", {
+    method: "POST", headers: authHeaders(),
+    body: JSON.stringify({
+      signal_type: $("sa-type").value.trim() || "manual",
+      title, content,
+      source_url: $("sa-url").value.trim(),
+    }),
+  });
+  const d = await r.json();
+  $("sa-result").textContent = JSON.stringify(d, null, 2);
+}
+
+async function loadStockArgosSignals() {
+  if (!state.apiKey) return;
+  try {
+    const r = await fetch("/api/v1/integrations/stockargos/signals?limit=15", { headers: authHeaders() });
+    const d = await r.json();
+    $("sa-result").textContent = JSON.stringify(d, null, 2);
+  } catch (e) {
+    $("sa-result").textContent = "Error: " + e.message;
+  }
 }
 
 function init() {
@@ -423,6 +504,11 @@ function init() {
   $("btn-predictive-load").addEventListener("click", loadPredictiveSuggestions);
   $("btn-probe-run").addEventListener("click", runProbe);
   $("btn-probe-pheromones").addEventListener("click", loadPheromones);
+  $("btn-tiktok-analyze").addEventListener("click", runTikTokAnalyze);
+  $("btn-inbox-poll").addEventListener("click", pollInbox);
+  $("btn-inbox-refresh").addEventListener("click", loadInboxData);
+  $("btn-sa-emit").addEventListener("click", emitStockArgosSignal);
+  $("btn-sa-list").addEventListener("click", loadStockArgosSignals);
   document.querySelectorAll(".probe-mode").forEach((el) => {
     el.addEventListener("click", () => el.classList.toggle("active"));
   });

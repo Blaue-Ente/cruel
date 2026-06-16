@@ -92,7 +92,40 @@ POST /api/v1/probe/run
 GET /api/v1/probe/pheromones   # sweet/poison routing memory
 ```
 
-**Pheromones:** Sweet = добър източник, Poison = CAPTCHA/block → swarm избягва.
+**Pheromones:** Sweet = добър източник, Poison = CAPTCHA/block → swarm избягва. v5: Redis primary, SQLite fallback.
+
+## v5.0 — Multimodal + Inbox + StockArgos
+
+| Функция | Описание |
+|---------|----------|
+| **TikTok Multimodal** | Vision frames + audio tone + LLM synthesis |
+| **Inbox IMAP** | Реални имейл отговори от conversational probe forms |
+| **Redis Pheromones** | Бърза pheromone памет (auto fallback към SQLite) |
+| **StockArgos Webhook** | EES score + signal delivery към StockArgos |
+
+```bash
+# TikTok multimodal analysis
+POST /api/v1/multimodal/tiktok
+{"url": "https://www.tiktok.com/@user/video/123"}
+
+# Inbox — form submission tracking + IMAP poll
+POST /api/v1/inbox/poll
+GET  /api/v1/inbox/submissions
+GET  /api/v1/inbox/messages
+
+# StockArgos signals
+POST /api/v1/integrations/stockargos/signal
+GET  /api/v1/integrations/stockargos/signals
+
+# Probe with StockArgos emit
+POST /api/v1/probe/run
+{"url": "...", "modes": ["api_fuzz"], "emit_stockargos": true}
+```
+
+```bash
+pip install playwright redis
+python3 -m playwright install chromium
+```
 
 ## API Endpoints
 
@@ -128,7 +161,11 @@ python3 run_app.py
 
 - [x] Vision scraping (Playwright + NVIDIA/Groq vision, HTML fallback)
 - [x] Predictive pre-scraping (context-aware background research)
-- [ ] StockArgos webhook integration
+- [x] Active Probe v4 (provocative, conversational, swarm, pheromones)
+- [x] TikTok multimodal (vision + audio tone analysis)
+- [x] IMAP inbox integration (real email form responses)
+- [x] Redis pheromones (SQLite fallback)
+- [x] StockArgos webhook integration
 - [ ] Playwright stealth mode for Cloudflare bypass
 
 ## Лиценз

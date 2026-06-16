@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from app.probe.api_fuzz import api_fuzz
 from app.probe.conversational import conversational_scrape
-from app.probe.pheromones import check, init_pheromone_table, list_pheromones
+from app.probe.pheromones import check, get_backend_status, init_pheromone_table, list_pheromones
 from app.probe.provocative import provocative_form_probe, provocative_stock_probe
 from app.probe.swarm import swarm_scrape
 from app.probe.temporal import temporal_scrape
@@ -47,7 +47,7 @@ def get_probe_capabilities() -> dict[str, Any]:
             "swarm": "Parallel micro-scrapers with pheromone memory",
             "ghost_cursor": "Human-like mouse (used in all Playwright modes)",
         },
-        "pheromones": "SQLite-backed sweet/poison routing",
+        "pheromones": get_backend_status(),
     }
 
 
@@ -60,6 +60,7 @@ async def run_active_probe(
     temporal_offset_days: int = 1,
     swarm_workers: int = 5,
     provider: Optional[str] = None,
+    emit_stockargos: bool = False,
 ) -> dict[str, Any]:
     init_pheromone_table()
     modes = modes or ["api_fuzz", "vision"]
@@ -94,4 +95,9 @@ async def run_active_probe(
     results["success"] = any(
         f.get("success") for f in results["findings"].values() if isinstance(f, dict)
     )
+
+    if emit_stockargos and results["success"]:
+        from app.integrations.stockargos import signal_from_probe
+        results["stockargos_signal"] = signal_from_probe(results, url)
+
     return results

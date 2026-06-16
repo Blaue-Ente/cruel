@@ -1,3 +1,4 @@
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from typing import Any, Optional
@@ -8,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.agent import run_agent, stream_agent_thoughts
 from app.auth import require_admin, require_api_key
-from app.config import APP_NAME, BASE_DIR, SCRAPER_API_KEY
+from app.config import APP_NAME, BASE_DIR, SCRAPER_API_KEY, STOCKARGOS_WEBHOOK_URL
 from app.llm import build_chat_reply, get_llm_status, parse_user_command
 from app.predictive import (
     get_suggestions_for_context,
@@ -17,8 +18,18 @@ from app.predictive import (
     start_predictive_background,
 )
 from app.probe.orchestrator import get_probe_capabilities, run_active_probe
-from app.probe.pheromones import init_pheromone_table, list_pheromones
+from app.probe.pheromones import get_backend_status, init_pheromone_table, list_pheromones
 from app.vision import get_vision_capabilities, vision_scrape
+from app.inbox import (
+    get_inbox_messages,
+    get_inbox_status,
+    get_submissions,
+    init_inbox_tables,
+    poll_inbox,
+    start_inbox_background,
+)
+from app.multimodal.tiktok import analyze_tiktok
+from app.integrations.stockargos import emit_signal, init_stockargos_tables, list_signals
 from app.models import (
     AgentRequest,
     AgentResponse,
@@ -30,6 +41,8 @@ from app.models import (
     ContextRequest,
     PredictiveSuggestionsResponse,
     ProbeRequest,
+    StockArgosSignalRequest,
+    TikTokAnalyzeRequest,
     DashboardStats,
     LLMCommandJSON,
     ScrapeRequest,
@@ -66,14 +79,17 @@ import requests
 async def lifespan(app: FastAPI):
     init_db()
     init_pheromone_table()
+    init_inbox_tables()
+    init_stockargos_tables()
     start_predictive_background()
+    start_inbox_background()
     yield
 
 
 app = FastAPI(
     title=APP_NAME,
     description="ArgosScout — Autonomous Knowledge Agent + Active Probe",
-    version="4.0.0",
+    version="5.0.0",
     lifespan=lifespan,
 )
 
@@ -91,12 +107,18 @@ async def health():
     return {
         "status": "ok",
         "app": APP_NAME,
+        "version": "5.0.0",
         "scraper_api_configured": bool(SCRAPER_API_KEY),
         "llm": get_llm_status(),
         "scraperio": get_scraper_capabilities(),
         "vision": get_vision_capabilities(),
         "predictive": get_predictive_stats(),
         "probe": get_probe_capabilities(),
+        "pheromones": get_backend_status(),
+        "inbox": get_inbox_status(),
+        "stockargos": {
+            "webhook_configured": bool(STOCKARGOS_WEBHOOK_URL),
+        },
     }
 
 
@@ -251,6 +273,7 @@ async def api_active_probe(body: ProbeRequest, _key: dict = Depends(require_api_
             temporal_offset_days=body.temporal_offset_days,
             swarm_workers=body.swarm_workers,
             provider=body.llm_provider,
+            emit_stockargos=body.emit_stockargos,
         )
         log_scrape(str(body.url), "probe", items_count=len(body.modes))
         return result
@@ -265,7 +288,67 @@ async def probe_capabilities():
 
 @app.get("/api/v1/probe/pheromones")
 async def probe_pheromones(_key: dict = Depends(require_api_key)):
-    return {"pheromones": list_pheromones()}
+    return {"pheromones": list_pheromones(), "backend": get_backend_status()}
+
+
+# --- Multimodal TikTok ---
+
+
+@app.post("/api/v1/multimodal/tiktok")
+async def api_tiktok_analyze(body: TikTokAnalyzeRequest, _key: dict = Depends(require_api_key)):
+    try:
+        result = await asyncio.to_thread(analyze_tiktok, str(body.url), body.llm_provider)
+        log_scrape(str(body.url), "tiktok", items_count=1, success=result.get("success", False))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"TikTok analysis failed: {e}")
+
+
+# --- Inbox / Form Responses ---
+
+
+@app.post("/api/v1/inbox/poll")
+async def api_inbox_poll(_key: dict = Depends(require_api_key)):
+    return await asyncio.to_thread(poll_inbox)
+
+
+@app.get("/api/v1/inbox/submissions")
+async def api_inbox_submissions(limit: int = 20, _key: dict = Depends(require_api_key)):
+    return {"submissions": get_submissions(limit)}
+
+
+@app.get("/api/v1/inbox/messages")
+async def api_inbox_messages(
+    submission_id: Optional[str] = None,
+    limit: int = 20,
+    _key: dict = Depends(require_api_key),
+):
+    return {"messages": get_inbox_messages(submission_id, limit)}
+
+
+@app.get("/api/v1/inbox/status")
+async def api_inbox_status(_key: dict = Depends(require_api_key)):
+    return get_inbox_status()
+
+
+# --- StockArgos Integration ---
+
+
+@app.post("/api/v1/integrations/stockargos/signal")
+async def api_stockargos_signal(body: StockArgosSignalRequest, _key: dict = Depends(require_api_key)):
+    return emit_signal(
+        signal_type=body.signal_type,
+        title=body.title,
+        content=body.content,
+        source_url=body.source_url,
+        metadata=body.metadata,
+        auto_deliver=body.auto_deliver,
+    )
+
+
+@app.get("/api/v1/integrations/stockargos/signals")
+async def api_stockargos_signals(limit: int = 20, _key: dict = Depends(require_api_key)):
+    return {"signals": list_signals(limit)}
 
 
 # --- ArgosScout Agent ---

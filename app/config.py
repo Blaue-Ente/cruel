@@ -78,6 +78,22 @@ PREDICTIVE_ENABLED = os.getenv("PREDICTIVE_ENABLED", "true").lower() == "true"
 PREDICTIVE_INTERVAL_SEC = int(os.getenv("PREDICTIVE_INTERVAL_SEC", "300"))
 PREDICTIVE_MAX_TOPICS = int(os.getenv("PREDICTIVE_MAX_TOPICS", "3"))
 
+# Pheromones — Redis primary, SQLite fallback
+REDIS_URL = os.getenv("REDIS_URL", "")
+PHEROMONE_BACKEND = os.getenv("PHEROMONE_BACKEND", "auto").lower()  # auto | redis | sqlite
+
+# IMAP inbox — real email responses from conversational probes
+IMAP_HOST = os.getenv("IMAP_HOST", "")
+IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
+IMAP_USER = os.getenv("IMAP_USER", "")
+IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "")
+INBOX_ENABLED = os.getenv("INBOX_ENABLED", "false").lower() == "true"
+INBOX_POLL_INTERVAL_SEC = int(os.getenv("INBOX_POLL_INTERVAL_SEC", "120"))
+
+# StockArgos ecosystem webhook
+STOCKARGOS_WEBHOOK_URL = os.getenv("STOCKARGOS_WEBHOOK_URL", "")
+STOCKARGOS_WEBHOOK_SECRET = os.getenv("STOCKARGOS_WEBHOOK_SECRET", "")
+
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "cruel-admin-change-me")
 APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("APP_PORT", "8000"))

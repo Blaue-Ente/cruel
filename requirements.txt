@@ -27,6 +27,9 @@ readability-lxml==0.8.1
 lxml==5.3.0
 PyPDF2==3.0.1
 
-# Optional: Vision screenshots
-# playwright>=1.40.0
-# Run: playwright install chromium
+# Vision + TikTok multimodal
+playwright>=1.40.0
+# Run: python3 -m playwright install chromium
+
+# Pheromone scale-up (optional — falls back to SQLite)
+redis>=5.0.0

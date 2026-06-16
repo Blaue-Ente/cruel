@@ -7,7 +7,9 @@ from typing import Any, AsyncGenerator, Callable, Optional
 
 import requests
 
-from app.config import AGENT_MAX_SCRAPE_URLS, AGENT_MAX_SEARCH_RESULTS
+from app.config import AGENT_MAX_SCRAPE_URLS, AGENT_MAX_SEARCH_RESULTS, COMPLIANCE_COUNTRY, DEFAULT_PRIVACY_LAYER
+from app.compliance.policy import PolicyEngine
+from app.intelligence.pipeline import detective_scrape
 from app.providers import chat_complete, chat_stream
 from app.scraper import scrape_url
 from app.models import ScrapeRequest
@@ -50,10 +52,20 @@ async def run_agent(
     use_wayback: bool = True,
     deep_scrape: bool = False,
     on_thought: Optional[ThoughtCallback] = None,
+    privacy_layer: Optional[str] = None,
+    country: Optional[str] = None,
+    passive_only: bool = False,
 ) -> dict[str, Any]:
     def think(phase: str, text: str):
         if on_thought:
             on_thought(phase, text)
+
+    policy = PolicyEngine(
+        layer=privacy_layer or DEFAULT_PRIVACY_LAYER,
+        country=country or COMPLIANCE_COUNTRY,
+        passive_only=passive_only,
+    )
+    think("plan", f"Privacy Layer: {policy.profile['name_bg']} ({policy.layer.value})")
 
     clarification = _needs_clarification(goal)
     if clarification:
@@ -84,14 +96,42 @@ async def run_agent(
     wayback_data: list[dict] = []
 
     for i, url in enumerate(urls_to_scrape):
-        think("scrape", f"[{i+1}/{len(urls_to_scrape)}] Чета {url[:60]}...")
+        think("scrape", f"[{i+1}/{len(urls_to_scrape)}] Smart Detective: {url[:60]}...")
         try:
-            if deep_scrape:
+            text = ""
+            title = url
+            det = None
+
+            if policy.is_allowed("api_echo") or policy.is_allowed("seo_autopsy"):
+                det = await detective_scrape(
+                    url, goal=goal,
+                    privacy_layer=policy.layer.value,
+                    country=policy.country,
+                    passive_only=passive_only,
+                    provider=provider,
+                )
+                if det.get("success"):
+                    findings = det.get("findings", {})
+                    if findings.get("api_echo", {}).get("data"):
+                        import json
+                        text = json.dumps(findings["api_echo"]["data"], ensure_ascii=False)[:3000]
+                        title = findings["api_echo"].get("platform", "API Echo")
+                    elif findings.get("seo_autopsy", {}).get("structured"):
+                        import json
+                        text = json.dumps(findings["seo_autopsy"]["structured"], ensure_ascii=False)[:3000]
+                        title = "SEO Autopsy"
+                    elif findings.get("semantic", {}).get("content"):
+                        text = findings["semantic"]["content"]
+                        title = findings["semantic"].get("title", url)
+                    if text:
+                        think("scrape", f"✓ {det.get('winning_method')}: {det.get('message', '')[:80]}")
+
+            if not text and deep_scrape and policy.is_allowed("universal_scrape"):
                 data = await asyncio.to_thread(lambda u=url: universal_scrape(u, max_items=3))
                 items = data.get("items", [])
                 text = "\n".join(item.get("content", "")[:1500] for item in items[:2])
                 title = items[0].get("title", "") if items else url
-            else:
+            elif not text:
                 resp = await asyncio.to_thread(
                     lambda u=url: requests.get(u, timeout=12, headers={"User-Agent": "ArgosScout/1.0"})
                 )
@@ -99,10 +139,16 @@ async def run_agent(
                 text = sem["content"]
                 title = sem["title"]
 
-            scraped.append({"url": url, "title": title, "content": text[:3000]})
-            think("scrape", f"✓ Извлечено {len(text)} символа от {title[:40]}")
+            scraped.append({
+                "url": url,
+                "title": title,
+                "content": text[:3000],
+                "layer": policy.layer.value,
+                "gdpr": det.get("gdpr") if det and det.get("success") else None,
+            })
+            think("scrape", f"✓ Извлечено {len(text)} символа от {str(title)[:40]}")
 
-            if use_wayback:
+            if use_wayback and policy.is_allowed("wayback"):
                 wb = await asyncio.to_thread(temporal_analysis, url)
                 if wb.get("has_history"):
                     wayback_data.append(wb)
@@ -124,6 +170,7 @@ async def run_agent(
         "scraped": scraped,
         "wayback": wayback_data,
         "synthesis": synthesis,
+        "privacy_layer": policy.layer.value,
     }
 
 

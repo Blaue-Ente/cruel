@@ -24,6 +24,8 @@
       <button class="nav-item" data-page="tiktok"><span class="nav-icon">🎵</span><span>TikTok Multimodal</span></button>
       <button class="nav-item" data-page="inbox"><span class="nav-icon">📬</span><span>Inbox / Forms</span></button>
       <button class="nav-item" data-page="stockargos"><span class="nav-icon">📈</span><span>StockArgos</span></button>
+      <button class="nav-item" data-page="detective"><span class="nav-icon">🕵️</span><span>Smart Detective</span></button>
+      <button class="nav-item" data-page="compliance"><span class="nav-icon">🛡️</span><span>Privacy Layers</span></button>
       <button class="nav-item" data-page="keys"><span class="nav-icon">🔑</span><span>API Ключове</span></button>
       <button class="nav-item" data-page="settings"><span class="nav-icon">⚙️</span><span>Настройки</span></button>
     </nav>
@@ -36,7 +38,7 @@
     <header class="topbar">
       <h2 id="page-title">Dashboard</h2>
       <div class="topbar-actions">
-        <span class="badge badge-green">v5.0</span>
+        <span class="badge badge-green">v6.0</span>
       </div>
     </header>
 
@@ -391,6 +393,91 @@
             <div class="card-body">
               <button class="btn btn-secondary" id="btn-sa-list" style="margin-bottom:.75rem">Load Signals</button>
               <pre id="sa-result" class="json-view" style="max-height:420px">// StockArgos signals</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SMART DETECTIVE -->
+      <section id="page-detective" class="page">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">🕵️ Smart Detective Pipeline</div>
+            <div class="card-body">
+              <p style="color:var(--muted);font-size:.84rem;margin-bottom:1rem">
+                API Echo → SEO Autopsy → Common Crawl → Wayback → Semantic.
+                Редът и методите зависят от избрания Privacy Layer.
+              </p>
+              <label>URL</label>
+              <input type="url" id="det-url" placeholder="https://example.com" />
+              <label>Цел</label>
+              <input type="text" id="det-goal" placeholder="цени, курсове, API..." />
+              <label>Privacy Layer</label>
+              <select id="det-layer">
+                <option value="">Auto (от държава)</option>
+                <option value="ghost">👻 Ghost — пасивен</option>
+                <option value="standard">Standard</option>
+                <option value="eu_shield">🇪🇺 EU Shield</option>
+                <option value="de_fortress">🇩🇪 DE Fortress</option>
+                <option value="hunter">🎯 Hunter — агресивен</option>
+              </select>
+              <label>Държава (ISO)</label>
+              <input type="text" id="det-country" placeholder="DE, BG, US" maxlength="2" style="max-width:80px" />
+              <div class="toggle-row">
+                <input type="checkbox" id="det-passive" />
+                <label for="det-passive" style="margin:0">Само пасивен (Ghost)</label>
+              </div>
+              <button class="btn btn-primary" id="btn-detective">Стартирай Detective</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">OSINT Investigation</div>
+            <div class="card-body">
+              <label>Име / Компания</label>
+              <input type="text" id="osint-name" placeholder="Иван Петров / Firma GmbH" />
+              <label>Website URL</label>
+              <input type="url" id="osint-url" placeholder="https://..." />
+              <label>TikTok URL</label>
+              <input type="url" id="osint-tiktok" placeholder="https://tiktok.com/..." />
+              <label>Държава</label>
+              <input type="text" id="osint-country" value="DE" maxlength="2" style="max-width:80px" />
+              <button class="btn btn-primary" id="btn-osint">OSINT Investigate</button>
+              <pre id="detective-result" class="json-view" style="margin-top:1rem;max-height:420px">// Results</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PRIVACY LAYERS -->
+      <section id="page-compliance" class="page">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">🛡️ Privacy Layers (Слоеве на поверителност)</div>
+            <div class="card-body">
+              <div class="alert alert-info">
+                <strong>ghost</strong> — Common Crawl, Wayback, JSON-LD (нулев риск)<br>
+                <strong>standard</strong> — глобален, лек PII филтър<br>
+                <strong>eu_shield</strong> — пълен GDPR, robots.txt<br>
+                <strong>de_fortress</strong> — Германия: най-строг, probe dry_run<br>
+                <strong>hunter</strong> — агресивен (ROW, explicit)
+              </div>
+              <pre id="compliance-layers" class="json-view" style="max-height:280px">Loading...</pre>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">GDPR Scanner</div>
+            <div class="card-body">
+              <label>Privacy Layer</label>
+              <select id="gdpr-layer">
+                <option value="de_fortress">🇩🇪 DE Fortress</option>
+                <option value="eu_shield">🇪🇺 EU Shield</option>
+                <option value="standard">Standard</option>
+                <option value="hunter">Hunter</option>
+              </select>
+              <label>Текст за сканиране</label>
+              <textarea id="gdpr-text" placeholder="Текст с имейли, телефони..."></textarea>
+              <button class="btn btn-primary" id="btn-gdpr-scan">GDPR Scan</button>
+              <pre id="gdpr-result" class="json-view" style="margin-top:1rem;max-height:280px">// GDPR result</pre>
             </div>
           </div>
         </div>

@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Optional
 
+from app.compliance.policy import PolicyEngine
+from app.config import COMPLIANCE_COUNTRY, DEFAULT_PRIVACY_LAYER
 from app.probe.api_fuzz import api_fuzz
 from app.probe.conversational import conversational_scrape
 from app.probe.pheromones import check, get_backend_status, init_pheromone_table, list_pheromones
@@ -48,6 +50,7 @@ def get_probe_capabilities() -> dict[str, Any]:
             "ghost_cursor": "Human-like mouse (used in all Playwright modes)",
         },
         "pheromones": get_backend_status(),
+        "privacy_layers": True,
     }
 
 
@@ -61,16 +64,42 @@ async def run_active_probe(
     swarm_workers: int = 5,
     provider: Optional[str] = None,
     emit_stockargos: bool = False,
+    privacy_layer: Optional[str] = None,
+    country: Optional[str] = None,
 ) -> dict[str, Any]:
     init_pheromone_table()
+    policy = PolicyEngine(
+        layer=privacy_layer or DEFAULT_PRIVACY_LAYER,
+        country=country or COMPLIANCE_COUNTRY,
+    )
     modes = modes or ["api_fuzz", "vision"]
-    results: dict[str, Any] = {"url": url, "modes_run": [], "findings": {}}
+    allowed, blocked = policy.filter_probe_modes(modes)
+    dry_run = policy.enforce_probe_dry_run(dry_run)
+
+    results: dict[str, Any] = {
+        "url": url,
+        "modes_run": [],
+        "modes_blocked": blocked,
+        "findings": {},
+        "privacy_layer": policy.layer.value,
+        "dry_run_enforced": dry_run,
+    }
+
+    url_check = policy.check_url(url)
+    results["compliance"] = url_check
+    if not url_check.get("allowed"):
+        results["success"] = False
+        results["error"] = url_check.get("blocked_reason", "Blocked by compliance")
+        return results
+
+    if blocked:
+        results["policy_note"] = f"Блокирани режими за {policy.profile['name_bg']}: {', '.join(blocked)}"
 
     pheromone = check(url)
     if pheromone:
         results["pheromone_warning"] = pheromone
 
-    for mode in modes:
+    for mode in allowed:
         if mode == "provocative_stock":
             r = await asyncio.to_thread(provocative_stock_probe, url)
         elif mode == "provocative_form":
@@ -98,6 +127,9 @@ async def run_active_probe(
 
     if emit_stockargos and results["success"]:
         from app.integrations.stockargos import signal_from_probe
-        results["stockargos_signal"] = signal_from_probe(results, url)
+        signal = signal_from_probe(results, url)
+        gdpr = policy.apply_gdpr(signal, context="stockargos_signal")
+        results["stockargos_signal"] = gdpr["data"] if gdpr["gdpr_applied"] else signal
+        results["stockargos_gdpr"] = gdpr.get("summary")
 
     return results

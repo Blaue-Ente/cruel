@@ -5,6 +5,8 @@ const state = {
   adminSecret: localStorage.getItem("cruel_admin_secret") || "",
   llmProvider: localStorage.getItem("cruel_llm_provider") || "auto",
   llmModel: localStorage.getItem("cruel_llm_model") || "",
+  privacyLayer: localStorage.getItem("cruel_privacy_layer") || "",
+  country: localStorage.getItem("cruel_country") || "DE",
 };
 
 function saveState() {
@@ -36,6 +38,8 @@ function showPage(id) {
   if (id === "probe") loadProbeCapabilities();
   if (id === "inbox") loadInboxData();
   if (id === "stockargos") loadStockArgosSignals();
+  if (id === "compliance") loadComplianceLayers();
+  if (id === "detective") { $("det-country").value = state.country; }
 }
 
 async function loadHealth() {
@@ -479,6 +483,76 @@ async function loadStockArgosSignals() {
   }
 }
 
+async function loadComplianceLayers() {
+  try {
+    const r = await fetch("/api/v1/compliance/layers");
+    const d = await r.json();
+    $("compliance-layers").textContent = JSON.stringify(d, null, 2);
+  } catch (e) {
+    $("compliance-layers").textContent = "Error: " + e.message;
+  }
+}
+
+async function runDetective() {
+  if (!state.apiKey) return alert("Въведете API ключ");
+  const url = $("det-url").value.trim();
+  if (!url) return;
+  $("detective-result").textContent = "Smart Detective running...";
+  const body = {
+    url,
+    goal: $("det-goal").value.trim(),
+    passive_only: $("det-passive").checked,
+    llm_provider: state.llmProvider !== "auto" ? state.llmProvider : null,
+  };
+  const layer = $("det-layer").value;
+  const country = $("det-country").value.trim();
+  if (layer) body.privacy_layer = layer;
+  if (country) body.country = country.toUpperCase();
+  try {
+    const r = await fetch("/api/v1/intelligence/detective", {
+      method: "POST", headers: authHeaders(), body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    $("detective-result").textContent = JSON.stringify(d, null, 2);
+  } catch (e) {
+    $("detective-result").textContent = "Error: " + e.message;
+  }
+}
+
+async function runOsint() {
+  if (!state.apiKey) return alert("Въведете API ключ");
+  $("detective-result").textContent = "OSINT investigating...";
+  const body = {
+    name: $("osint-name").value.trim(),
+    url: $("osint-url").value.trim(),
+    tiktok_url: $("osint-tiktok").value.trim(),
+    country: ($("osint-country").value || "DE").toUpperCase(),
+    privacy_layer: $("det-layer").value || null,
+    llm_provider: state.llmProvider !== "auto" ? state.llmProvider : null,
+  };
+  try {
+    const r = await fetch("/api/v1/osint/investigate", {
+      method: "POST", headers: authHeaders(), body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    $("detective-result").textContent = JSON.stringify(d, null, 2);
+  } catch (e) {
+    $("detective-result").textContent = "Error: " + e.message;
+  }
+}
+
+async function runGdprScan() {
+  if (!state.apiKey) return alert("Въведете API ключ");
+  const text = $("gdpr-text").value.trim();
+  if (!text) return;
+  const r = await fetch("/api/v1/compliance/gdpr-scan", {
+    method: "POST", headers: authHeaders(),
+    body: JSON.stringify({ text, privacy_layer: $("gdpr-layer").value }),
+  });
+  const d = await r.json();
+  $("gdpr-result").textContent = JSON.stringify(d, null, 2);
+}
+
 function init() {
   $("set-api-key").value = state.apiKey;
   $("set-admin-secret").value = state.adminSecret;
@@ -509,6 +583,9 @@ function init() {
   $("btn-inbox-refresh").addEventListener("click", loadInboxData);
   $("btn-sa-emit").addEventListener("click", emitStockArgosSignal);
   $("btn-sa-list").addEventListener("click", loadStockArgosSignals);
+  $("btn-detective").addEventListener("click", runDetective);
+  $("btn-osint").addEventListener("click", runOsint);
+  $("btn-gdpr-scan").addEventListener("click", runGdprScan);
   document.querySelectorAll(".probe-mode").forEach((el) => {
     el.addEventListener("click", () => el.classList.toggle("active"));
   });

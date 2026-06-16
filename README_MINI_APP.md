@@ -51,6 +51,23 @@ POST /api/v1/wayback
 ### Semantic DOM Filtering
 Автоматично премахва реклами, cookie банери, навигация (trafilatura + readability).
 
+### Vision Scraping (v3.1)
+Playwright screenshot → Vision LLM (NVIDIA / Groq free). Чете страницата като човек.
+```bash
+POST /api/v1/scrape/vision
+{"url": "https://example.com", "goal": "extract prices and titles"}
+```
+Fallback без Playwright: semantic HTML + LLM.
+
+### Predictive Pre-Scraping (v3.1)
+Следи контекста на работата и в бекграунд scrape-ва релевантно съдържание.
+```bash
+POST /api/v1/predictive/context   # записва интерес
+GET  /api/v1/predictive/suggestions?message=...
+POST /api/v1/predictive/run       # ръчен цикъл
+```
+Автоматичен бекграунд цикъл на всеки 300s (конфигурируем).
+
 ## API Endpoints
 
 | Endpoint | Описание |
@@ -83,8 +100,8 @@ python3 run_app.py
 
 ## Roadmap
 
-- [ ] Vision scraping (Playwright screenshot + NVIDIA vision model)
-- [ ] Predictive pre-scraping (context-aware background research)
+- [x] Vision scraping (Playwright + NVIDIA/Groq vision, HTML fallback)
+- [x] Predictive pre-scraping (context-aware background research)
 - [ ] StockArgos webhook integration
 - [ ] Playwright stealth mode for Cloudflare bypass
 

@@ -58,6 +58,7 @@ class DashboardStats(BaseModel):
 class IntentType(str, Enum):
     SCRAPE = "scrape"
     UNIVERSAL_SCRAPE = "universal_scrape"
+    VISION_SCRAPE = "vision_scrape"
     AGENT_RESEARCH = "agent_research"
     SEARCH_SITES = "search_sites"
     ADMIN = "admin"
@@ -111,6 +112,24 @@ class WaybackRequest(BaseModel):
 class SelfHealRequest(BaseModel):
     url: HttpUrl
     selectors: dict[str, str]
+
+
+class VisionScrapeRequest(BaseModel):
+    url: HttpUrl
+    goal: str = ""
+    llm_provider: Optional[str] = None
+
+
+class ContextRequest(BaseModel):
+    message: str
+    llm_provider: Optional[str] = None
+
+
+class PredictiveSuggestionsResponse(BaseModel):
+    topics: list[str] = Field(default_factory=list)
+    suggestions: list[dict[str, Any]] = Field(default_factory=list)
+    predictive_enabled: bool = True
+    message: str = ""
 
 
 class ChatResponse(BaseModel):

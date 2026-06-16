@@ -32,6 +32,7 @@ function showPage(id) {
   $("page-title").textContent = document.querySelector(`[data-page="${id}"] span`)?.textContent || "Dashboard";
   if (id === "dashboard") loadDashboard();
   if (id === "keys") loadKeys();
+  if (id === "predictive") loadPredictiveStats();
 }
 
 async function loadHealth() {
@@ -280,6 +281,79 @@ function runAgentStream() {
   ws.onerror = () => addAgentThought("error", "WebSocket грешка");
 }
 
+async function runVisionScrape() {
+  if (!state.apiKey) return alert("Въведете API ключ в Settings");
+  const url = $("vision-url").value.trim();
+  const goal = $("vision-goal").value.trim();
+  if (!url) return;
+  $("vision-result").textContent = "Vision scraping...";
+  try {
+    const r = await fetch("/api/v1/scrape/vision", {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ url, goal }),
+    });
+    const d = await r.json();
+    $("vision-result").textContent = JSON.stringify(d, null, 2);
+  } catch (e) {
+    $("vision-result").textContent = "Error: " + e.message;
+  }
+}
+
+async function loadPredictiveStats() {
+  if (!state.apiKey) return;
+  try {
+    const r = await fetch("/api/v1/predictive/stats", { headers: authHeaders() });
+    const d = await r.json();
+    $("predictive-stats").textContent = `Контекст теми: ${d.context_topics} · Кеширани: ${d.cached_items}`;
+  } catch {}
+}
+
+async function savePredictiveContext() {
+  if (!state.apiKey) return alert("Въведете API ключ");
+  const message = $("predictive-context").value.trim();
+  if (!message) return;
+  await fetch("/api/v1/predictive/context", {
+    method: "POST", headers: authHeaders(),
+    body: JSON.stringify({ message }),
+  });
+  loadPredictiveStats();
+  alert("Контекстът е записан — бекграунд scrape ще стартира автоматично.");
+}
+
+async function runPredictiveCycle() {
+  if (!state.apiKey) return alert("Въведете API ключ");
+  $("predictive-stats").textContent = "Стартирам predictive цикъл...";
+  const r = await fetch("/api/v1/predictive/run", { method: "POST", headers: authHeaders() });
+  const d = await r.json();
+  $("predictive-stats").textContent = `Готово: ${d.topics_processed} теми, ${d.items_cached} кеширани`;
+  loadPredictiveSuggestions();
+}
+
+async function loadPredictiveSuggestions() {
+  if (!state.apiKey) return;
+  const ctx = $("predictive-context").value.trim();
+  const r = await fetch(`/api/v1/predictive/suggestions?message=${encodeURIComponent(ctx)}`, { headers: authHeaders() });
+  const d = await r.json();
+  const box = $("predictive-suggestions");
+  box.innerHTML = "";
+  if (!d.suggestions?.length) {
+    box.innerHTML = '<div class="msg msg-sys">Няма кеширани материали още.</div>';
+    return;
+  }
+  d.suggestions.forEach((group) => {
+    const h = document.createElement("div");
+    h.className = "msg msg-sys";
+    h.textContent = `📂 ${group.topic}`;
+    box.appendChild(h);
+    (group.items || []).forEach((item) => {
+      const m = document.createElement("div");
+      m.className = "msg msg-bot";
+      m.textContent = `${item.title}\n${item.url}\n${item.content_preview}`;
+      box.appendChild(m);
+    });
+  });
+}
+
 function init() {
   $("set-api-key").value = state.apiKey;
   $("set-admin-secret").value = state.adminSecret;
@@ -299,6 +373,10 @@ function init() {
   $("btn-save-settings").addEventListener("click", saveSettings);
   $("btn-agent-run").addEventListener("click", runAgent);
   $("btn-agent-stream").addEventListener("click", runAgentStream);
+  $("btn-vision-scrape").addEventListener("click", runVisionScrape);
+  $("btn-predictive-save").addEventListener("click", savePredictiveContext);
+  $("btn-predictive-run").addEventListener("click", runPredictiveCycle);
+  $("btn-predictive-load").addEventListener("click", loadPredictiveSuggestions);
   $("set-llm-provider").addEventListener("change", () => { populateModels(); });
 
   document.querySelectorAll(".chip[data-agent]").forEach((el) => {

@@ -10,6 +10,13 @@ from app.agent import run_agent, stream_agent_thoughts
 from app.auth import require_admin, require_api_key
 from app.config import APP_NAME, BASE_DIR, SCRAPER_API_KEY
 from app.llm import build_chat_reply, get_llm_status, parse_user_command
+from app.predictive import (
+    get_suggestions_for_context,
+    record_user_context,
+    run_predictive_cycle,
+    start_predictive_background,
+)
+from app.vision import get_vision_capabilities, vision_scrape
 from app.models import (
     AgentRequest,
     AgentResponse,
@@ -18,11 +25,14 @@ from app.models import (
     ApiKeyResponse,
     ChatRequest,
     ChatResponse,
+    ContextRequest,
+    PredictiveSuggestionsResponse,
     DashboardStats,
     LLMCommandJSON,
     ScrapeRequest,
     ScrapeResponse,
     SelfHealRequest,
+    VisionScrapeRequest,
     UniversalScrapeBatchRequest,
     UniversalScrapeRequest,
     WaybackRequest,
@@ -32,6 +42,7 @@ from app.self_heal import extract_with_healing
 from app.store import (
     create_api_key,
     get_dashboard_stats,
+    get_predictive_stats,
     init_db,
     list_api_keys,
     log_scrape,
@@ -51,13 +62,14 @@ import requests
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    start_predictive_background()
     yield
 
 
 app = FastAPI(
     title=APP_NAME,
     description="ArgosScout — Autonomous Knowledge Agent (Cruel + Scraper.io)",
-    version="3.0.0",
+    version="3.1.0",
     lifespan=lifespan,
 )
 
@@ -78,6 +90,8 @@ async def health():
         "scraper_api_configured": bool(SCRAPER_API_KEY),
         "llm": get_llm_status(),
         "scraperio": get_scraper_capabilities(),
+        "vision": get_vision_capabilities(),
+        "predictive": get_predictive_stats(),
     }
 
 
@@ -171,9 +185,50 @@ async def api_self_heal(body: SelfHealRequest, _key: dict = Depends(require_api_
         raise HTTPException(status_code=502, detail=str(e))
 
 
+@app.post("/api/v1/scrape/vision")
+async def api_vision_scrape(body: VisionScrapeRequest, _key: dict = Depends(require_api_key)):
+    try:
+        result = vision_scrape(str(body.url), goal=body.goal, provider=body.llm_provider)
+        log_scrape(str(body.url), "vision", items_count=1, success=result.get("success", False))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Vision scrape failed: {e}")
+
+
+@app.get("/api/v1/scrape/vision/capabilities")
+async def vision_capabilities():
+    return get_vision_capabilities()
+
+
 @app.post("/api/v1/wayback")
 async def api_wayback(body: WaybackRequest, _key: dict = Depends(require_api_key)):
     return temporal_analysis(str(body.url))
+
+
+# --- Predictive Pre-Scraping ---
+
+
+@app.post("/api/v1/predictive/context")
+async def api_record_context(body: ContextRequest, _key: dict = Depends(require_api_key)):
+    topics = record_user_context(body.message, body.llm_provider)
+    return {"recorded_topics": topics, "count": len(topics)}
+
+
+@app.get("/api/v1/predictive/suggestions", response_model=PredictiveSuggestionsResponse)
+async def api_predictive_suggestions(message: str = "", _key: dict = Depends(require_api_key)):
+    data = get_suggestions_for_context(message)
+    return PredictiveSuggestionsResponse(**data)
+
+
+@app.post("/api/v1/predictive/run")
+async def api_predictive_run(_key: dict = Depends(require_api_key)):
+    result = await run_predictive_cycle()
+    return result
+
+
+@app.get("/api/v1/predictive/stats")
+async def api_predictive_stats(_key: dict = Depends(require_api_key)):
+    return get_predictive_stats()
 
 
 # --- ArgosScout Agent ---
@@ -181,6 +236,7 @@ async def api_wayback(body: WaybackRequest, _key: dict = Depends(require_api_key
 
 @app.post("/api/v1/agent/research", response_model=AgentResponse)
 async def api_agent_research(body: AgentRequest, _key: dict = Depends(require_api_key)):
+    record_user_context(body.goal, body.llm_provider)
     result = await run_agent(
         body.goal, provider=body.llm_provider, model=body.llm_model,
         use_wayback=body.use_wayback, deep_scrape=body.deep_scrape,
@@ -234,6 +290,7 @@ async def ws_agent(websocket: WebSocket):
 
 @app.post("/api/v1/chat", response_model=ChatResponse)
 async def api_chat(body: ChatRequest, _key: dict = Depends(require_api_key)):
+    record_user_context(body.message, body.llm_provider)
     command = parse_user_command(body.message, body.llm_provider, body.llm_model)
     scrape_result: Optional[ScrapeResponse] = None
     universal_result: Optional[dict[str, Any]] = None
@@ -243,6 +300,14 @@ async def api_chat(body: ChatRequest, _key: dict = Depends(require_api_key)):
     if body.execute_scrape and command.intent.value == "agent_research":
         agent_result = await run_agent(body.message, body.llm_provider, body.llm_model)
         extra = agent_result.get("synthesis", "")[:500]
+    elif body.execute_scrape and command.intent.value == "vision_scrape" and command.urls:
+        try:
+            vision_result = vision_scrape(command.urls[0], goal=body.message, provider=body.llm_provider)
+            extra = f"Vision OK — method: {vision_result.get('method')}"
+            if body.json_only:
+                return JSONResponse(content={"command": command.model_dump(), "vision_result": vision_result})
+        except Exception as e:
+            extra = f"Vision scrape failed: {e}"
     elif body.execute_scrape and command.urls:
         try:
             if command.scrape_mode in ("universal",) or command.intent.value == "universal_scrape":

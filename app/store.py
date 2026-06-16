@@ -45,6 +45,31 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS context_topics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic TEXT NOT NULL UNIQUE,
+                score REAL NOT NULL DEFAULT 1.0,
+                source_message TEXT,
+                last_seen TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS predictive_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic TEXT NOT NULL,
+                url TEXT NOT NULL,
+                title TEXT,
+                content TEXT,
+                scraped_at TEXT NOT NULL,
+                UNIQUE(topic, url)
+            )
+            """
+        )
         conn.commit()
 
 
@@ -179,3 +204,77 @@ def get_dashboard_stats() -> dict:
         "total_scrapes": scrape_count,
         "total_api_usage": total_usage,
     }
+
+
+def upsert_context_topic(topic: str, source_message: str = "", score_delta: float = 1.0) -> None:
+    now = _utcnow().isoformat()
+    with get_connection() as conn:
+        existing = conn.execute("SELECT id, score FROM context_topics WHERE topic = ?", (topic,)).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE context_topics SET score = score + ?, last_seen = ?, source_message = ? WHERE topic = ?",
+                (score_delta, now, source_message[:500], topic),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO context_topics (topic, score, source_message, last_seen, created_at) VALUES (?, ?, ?, ?, ?)",
+                (topic, score_delta, source_message[:500], now, now),
+            )
+        conn.commit()
+
+
+def get_active_topics(limit: int = 5) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT topic, score, source_message, last_seen FROM context_topics ORDER BY score DESC, last_seen DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def save_predictive_cache(topic: str, url: str, title: str, content: str) -> None:
+    now = _utcnow().isoformat()
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO predictive_cache (topic, url, title, content, scraped_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(topic, url) DO UPDATE SET
+                title = excluded.title,
+                content = excluded.content,
+                scraped_at = excluded.scraped_at
+            """,
+            (topic, url, title, content, now),
+        )
+        conn.commit()
+
+
+def get_predictive_suggestions(topic: Optional[str] = None, limit: int = 10) -> list[dict]:
+    with get_connection() as conn:
+        if topic:
+            rows = conn.execute(
+                "SELECT topic, url, title, content, scraped_at FROM predictive_cache WHERE topic = ? ORDER BY scraped_at DESC LIMIT ?",
+                (topic, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT topic, url, title, content, scraped_at FROM predictive_cache ORDER BY scraped_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+    return [
+        {
+            "topic": row["topic"],
+            "url": row["url"],
+            "title": row["title"],
+            "content_preview": (row["content"] or "")[:400],
+            "scraped_at": row["scraped_at"],
+        }
+        for row in rows
+    ]
+
+
+def get_predictive_stats() -> dict:
+    with get_connection() as conn:
+        topics = conn.execute("SELECT COUNT(*) as c FROM context_topics").fetchone()["c"]
+        cached = conn.execute("SELECT COUNT(*) as c FROM predictive_cache").fetchone()["c"]
+    return {"context_topics": topics, "cached_items": cached}

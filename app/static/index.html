@@ -18,6 +18,8 @@
       <button class="nav-item" data-page="chat"><span class="nav-icon">🤖</span><span>LLM Чатбот</span></button>
       <button class="nav-item" data-page="quick"><span class="nav-icon">⚡</span><span>Quick Scrape</span></button>
       <button class="nav-item" data-page="universal"><span class="nav-icon">🌐</span><span>Universal Scrape</span></button>
+      <button class="nav-item" data-page="vision"><span class="nav-icon">👁</span><span>Vision Scrape</span></button>
+      <button class="nav-item" data-page="predictive"><span class="nav-icon">🔮</span><span>Predictive</span></button>
       <button class="nav-item" data-page="keys"><span class="nav-icon">🔑</span><span>API Ключове</span></button>
       <button class="nav-item" data-page="settings"><span class="nav-icon">⚙️</span><span>Настройки</span></button>
     </nav>
@@ -30,7 +32,7 @@
     <header class="topbar">
       <h2 id="page-title">Dashboard</h2>
       <div class="topbar-actions">
-        <span class="badge badge-green">v3.0</span>
+        <span class="badge badge-green">v3.1</span>
       </div>
     </header>
 
@@ -206,6 +208,64 @@
             </div>
             <button class="btn btn-primary" id="btn-univ-scrape">Universal Scrape</button>
             <pre id="univ-result" class="json-view" style="margin-top:1rem">// Scraper.io result (team_id, items[])</pre>
+          </div>
+        </div>
+      </section>
+
+      </section>
+
+      <!-- VISION SCRAPE -->
+      <section id="page-vision" class="page">
+        <div class="card">
+          <div class="card-header">👁 Vision Scrape</div>
+          <div class="card-body">
+            <div class="alert alert-info">
+              Playwright screenshot → Vision LLM (NVIDIA / Groq free). Чете страницата като човек — заобикаля счупени CSS селектори.
+              Без Playwright: semantic HTML fallback.
+            </div>
+            <div class="row">
+              <div style="flex:2">
+                <label>URL</label>
+                <input type="url" id="vision-url" placeholder="https://example.com" />
+              </div>
+              <div style="flex:2">
+                <label>Цел (какво да извлече)</label>
+                <input type="text" id="vision-goal" placeholder="Цени, заглавия, бутони..." />
+              </div>
+            </div>
+            <button class="btn btn-primary" id="btn-vision-scrape">Vision Scrape</button>
+            <pre id="vision-result" class="json-view" style="margin-top:1rem">// Vision extraction result</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- PREDICTIVE -->
+      <section id="page-predictive" class="page">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">🔮 Predictive Pre-Scraping</div>
+            <div class="card-body">
+              <p style="color:var(--muted);font-size:.84rem;margin-bottom:1rem">
+                Следи контекста на работата ви и в бекграунд търси + scrape-ва релевантно съдържание,
+                преди дори да попитате.
+              </p>
+              <label>Контекст / интерес</label>
+              <textarea id="predictive-context" placeholder="Пиша sci-fi за дълбоководни същества..."></textarea>
+              <div class="row">
+                <button class="btn btn-primary" id="btn-predictive-save">Запиши контекст</button>
+                <button class="btn btn-secondary" id="btn-predictive-run">Стартирай цикъл</button>
+                <button class="btn btn-blue" id="btn-predictive-load">Зареди предложения</button>
+              </div>
+              <div id="predictive-stats" class="alert alert-info" style="margin-top:1rem">Статистики...</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">Предварително събрани материали</div>
+            <div class="card-body">
+              <div id="predictive-suggestions" class="chat-box" style="height:400px">
+                <div class="msg msg-sys">Използвайте Agent/Chat за да изградите контекст, или запишете интерес ръчно.</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

@@ -61,6 +61,23 @@ OLLAMA_MODELS = [
 AGENT_MAX_SEARCH_RESULTS = int(os.getenv("AGENT_MAX_SEARCH_RESULTS", "5"))
 AGENT_MAX_SCRAPE_URLS = int(os.getenv("AGENT_MAX_SCRAPE_URLS", "5"))
 
+# Vision scraping
+VISION_ENABLED = os.getenv("VISION_ENABLED", "true").lower() == "true"
+GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "llama-3.2-11b-vision-preview")
+NVIDIA_VISION_MODEL = os.getenv("NVIDIA_VISION_MODEL", "meta/llama-3.2-11b-vision-instruct")
+
+NVIDIA_FREE_MODELS.append(
+    {"id": "meta/llama-3.2-11b-vision-instruct", "name": "Llama 3.2 11B Vision", "free": True}
+)
+GROQ_FREE_MODELS.append(
+    {"id": "llama-3.2-11b-vision-preview", "name": "Llama 3.2 11B Vision", "free": True, "speed": "fast"}
+)
+
+# Predictive pre-scraping
+PREDICTIVE_ENABLED = os.getenv("PREDICTIVE_ENABLED", "true").lower() == "true"
+PREDICTIVE_INTERVAL_SEC = int(os.getenv("PREDICTIVE_INTERVAL_SEC", "300"))
+PREDICTIVE_MAX_TOPICS = int(os.getenv("PREDICTIVE_MAX_TOPICS", "3"))
+
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "cruel-admin-change-me")
 APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("APP_PORT", "8000"))

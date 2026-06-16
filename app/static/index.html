@@ -3,17 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cruel Dashboard — Scrape + Scraper.io + NVIDIA LLM</title>
+  <title>ArgosScout — Autonomous Knowledge Agent</title>
   <link rel="stylesheet" href="/static/dashboard.css" />
 </head>
 <body>
   <aside class="sidebar">
     <div class="brand">
-      <h1><span>Cruel</span> Dashboard</h1>
-      <p>Cruel + Scraper.io + NVIDIA NIM</p>
+      <h1><span>Argos</span>Scout</h1>
+      <p>Autonomous Knowledge Agent</p>
     </div>
     <nav class="nav">
       <button class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span>Dashboard</span></button>
+      <button class="nav-item" data-page="agent"><span class="nav-icon">🔭</span><span>Argos Agent</span></button>
       <button class="nav-item" data-page="chat"><span class="nav-icon">🤖</span><span>LLM Чатбот</span></button>
       <button class="nav-item" data-page="quick"><span class="nav-icon">⚡</span><span>Quick Scrape</span></button>
       <button class="nav-item" data-page="universal"><span class="nav-icon">🌐</span><span>Universal Scrape</span></button>
@@ -29,7 +30,7 @@
     <header class="topbar">
       <h2 id="page-title">Dashboard</h2>
       <div class="topbar-actions">
-        <span class="badge badge-blue">v2.0</span>
+        <span class="badge badge-green">v3.0</span>
       </div>
     </header>
 
@@ -75,7 +76,45 @@
         </div>
 
         <div class="alert alert-info" style="margin-top:1.25rem">
-          <strong>Бърз старт:</strong> Settings → въведете NVIDIA API ключ (build.nvidia.com) → API Keys → генерирайте ключ → Chat или Scrape.
+          <strong>ArgosScout</strong> — автономен агент за търсене, scrape, Wayback анализ.
+          Безплатни LLM: <strong>Groq</strong> (най-бърз) → NVIDIA → HuggingFace → Ollama (локален).
+        </div>
+      </section>
+
+      <!-- ARGOS AGENT -->
+      <section id="page-agent" class="page">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">🔭 ArgosScout Agent</div>
+            <div class="card-body">
+              <p style="color:var(--muted);font-size:.84rem;margin-bottom:1rem">
+                Автономно търсене → scrape → Wayback анализ → синтез. Без нужда от URL.
+              </p>
+              <div class="chips">
+                <span class="chip" data-agent="Намери най-добрите Prop Trading фирми за начинаещи">Prop Trading</span>
+                <span class="chip" data-agent="Кои са честите проблеми с 7-местни автомобили в Германия">Автомобили DE</span>
+                <span class="chip" data-agent="Сравни цените на имоти в София и Пловдив">Имоти BG</span>
+              </div>
+              <textarea id="agent-goal" placeholder="Напр: Намери ми най-добрите Prop Trading фирми за swing trading..."></textarea>
+              <div class="toggle-row">
+                <input type="checkbox" id="agent-wayback" checked />
+                <label for="agent-wayback" style="margin:0">Wayback анализ</label>
+              </div>
+              <div class="row">
+                <button class="btn btn-primary" id="btn-agent-run">Стартирай Agent</button>
+                <button class="btn btn-blue" id="btn-agent-stream">Live Stream (WebSocket)</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">Thought Process</div>
+            <div class="card-body">
+              <div id="agent-thoughts" class="chat-box" style="height:280px">
+                <div class="msg msg-sys">Thought process ще се появи тук в реално време...</div>
+              </div>
+              <pre id="agent-result" class="json-view" style="max-height:200px">// Synthesis result</pre>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -219,21 +258,31 @@
             <div class="card-header">LLM Provider</div>
             <div class="card-body">
               <div class="provider-card active">
-                <div class="provider-title">NVIDIA NIM (препоръчано)</div>
-                <div class="provider-desc">Безплатни модели на build.nvidia.com · OpenAI-compatible API</div>
+                <div class="provider-title">Groq (препоръчано — 800+ tok/s)</div>
+                <div class="provider-desc">Безплатен на console.groq.com · Най-бърз LLM</div>
+              </div>
+              <div class="provider-card">
+                <div class="provider-title">NVIDIA NIM</div>
+                <div class="provider-desc">Безплатни модели на build.nvidia.com</div>
+              </div>
+              <div class="provider-card">
+                <div class="provider-title">Ollama (локален SLM)</div>
+                <div class="provider-desc">Безплатен локален модел · ollama.com</div>
               </div>
               <label>Provider</label>
               <select id="set-llm-provider">
-                <option value="auto">Auto (NVIDIA → HF → Rule)</option>
+                <option value="auto">Auto (Groq → NVIDIA → HF → Ollama)</option>
+                <option value="groq">Groq (най-бърз)</option>
                 <option value="nvidia">NVIDIA NIM</option>
                 <option value="huggingface">Hugging Face</option>
+                <option value="ollama">Ollama (локален)</option>
                 <option value="rule">Rule-based (без LLM)</option>
               </select>
               <label>Модел</label>
               <select id="set-llm-model"></select>
               <div class="alert alert-info" style="margin-top:.5rem">
-                NVIDIA ключ: задайте <code>NVIDIA_API_KEY</code> в .env на сървъра.
-                HF ключ: <code>HF_TOKEN</code>. ScraperAPI: <code>SCRAPER_API_KEY</code>.
+                NVIDIA: <code>NVIDIA_API_KEY</code> · Groq: <code>GROQ_API_KEY</code> ·
+                HF: <code>HF_TOKEN</code> · Ollama: локално на :11434
               </div>
             </div>
           </div>

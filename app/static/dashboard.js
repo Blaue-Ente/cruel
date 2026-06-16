@@ -207,15 +207,77 @@ async function populateModels() {
     const d = await r.json();
     const sel = $("set-llm-model");
     sel.innerHTML = '<option value="">— default —</option>';
-    const models = state.llmProvider === "huggingface" ? d.hf_models : d.nvidia_models;
+    const prov = state.llmProvider === "huggingface" ? "hf" : state.llmProvider === "groq" ? "groq" : state.llmProvider === "ollama" ? "ollama" : "nvidia";
+    const models = prov === "groq" ? d.groq_models : prov === "hf" ? d.hf_models : prov === "ollama" ? d.ollama_models : d.nvidia_models;
     (models || []).forEach((m) => {
       const opt = document.createElement("option");
       opt.value = m.id;
-      opt.textContent = m.name + (m.free ? " (free)" : "");
+      opt.textContent = m.name + (m.free ? " (free)" : "") + (m.speed ? ` · ${m.speed}` : "");
       sel.appendChild(opt);
     });
     if (state.llmModel) sel.value = state.llmModel;
   } catch {}
+}
+
+function addAgentThought(phase, text) {
+  const div = document.createElement("div");
+  div.className = "msg msg-bot";
+  div.textContent = `[${phase}] ${text}`;
+  $("agent-thoughts").appendChild(div);
+  $("agent-thoughts").scrollTop = $("agent-thoughts").scrollHeight;
+}
+
+async function runAgent() {
+  if (!state.apiKey) return alert("Въведете API ключ в Settings");
+  const goal = $("agent-goal").value.trim();
+  if (!goal) return;
+  $("agent-thoughts").innerHTML = "";
+  addAgentThought("start", goal);
+  try {
+    const r = await fetch("/api/v1/agent/research", {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({
+        goal, use_wayback: $("agent-wayback").checked,
+        llm_provider: state.llmProvider !== "auto" ? state.llmProvider : null,
+        llm_model: state.llmModel || null,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Error");
+    if (d.status === "clarification_needed") {
+      addAgentThought("clarify", d.question);
+      return;
+    }
+    $("agent-result").textContent = d.synthesis || JSON.stringify(d, null, 2);
+    addAgentThought("done", `Намерени ${d.sources_found} източника, прочетени ${d.sources_scraped}.`);
+  } catch (e) {
+    addAgentThought("error", e.message);
+  }
+}
+
+function runAgentStream() {
+  if (!state.apiKey) return alert("Въведете API ключ в Settings");
+  const goal = $("agent-goal").value.trim();
+  if (!goal) return;
+  $("agent-thoughts").innerHTML = "";
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${location.host}/ws/agent`);
+  ws.onopen = () => {
+    ws.send(JSON.stringify({
+      goal, api_key: state.apiKey,
+      llm_provider: state.llmProvider !== "auto" ? state.llmProvider : null,
+      llm_model: state.llmModel || null,
+    }));
+  };
+  ws.onmessage = (ev) => {
+    const d = JSON.parse(ev.data);
+    if (d.type === "thought") addAgentThought(d.phase, d.text);
+    if (d.type === "result") $("agent-result").textContent = d.data?.synthesis || JSON.stringify(d.data, null, 2);
+    if (d.type === "synthesis_token") $("agent-result").textContent += d.text;
+    if (d.type === "done") addAgentThought("done", "Готово!");
+    if (d.type === "error") addAgentThought("error", d.text);
+  };
+  ws.onerror = () => addAgentThought("error", "WebSocket грешка");
 }
 
 function init() {
@@ -235,7 +297,13 @@ function init() {
   $("btn-univ-scrape").addEventListener("click", runUniversalScrape);
   $("btn-create-key").addEventListener("click", createKey);
   $("btn-save-settings").addEventListener("click", saveSettings);
+  $("btn-agent-run").addEventListener("click", runAgent);
+  $("btn-agent-stream").addEventListener("click", runAgentStream);
   $("set-llm-provider").addEventListener("change", () => { populateModels(); });
+
+  document.querySelectorAll(".chip[data-agent]").forEach((el) => {
+    el.addEventListener("click", () => { $("agent-goal").value = el.dataset.agent; });
+  });
 
   document.querySelectorAll(".chip").forEach((el) => {
     el.addEventListener("click", () => { $("chat-input").value = el.dataset.msg; });

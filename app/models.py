@@ -58,6 +58,7 @@ class DashboardStats(BaseModel):
 class IntentType(str, Enum):
     SCRAPE = "scrape"
     UNIVERSAL_SCRAPE = "universal_scrape"
+    AGENT_RESEARCH = "agent_research"
     SEARCH_SITES = "search_sites"
     ADMIN = "admin"
     HELP = "help"
@@ -77,6 +78,39 @@ class LLMCommandJSON(BaseModel):
     suggested_sites: list[dict[str, str]] = Field(default_factory=list)
     admin_action: Optional[str] = None
     scrape_mode: str = "quick"
+    use_wayback: bool = False
+    needs_clarification: bool = False
+    clarification_question: Optional[str] = None
+
+
+class AgentRequest(BaseModel):
+    goal: str
+    use_wayback: bool = True
+    deep_scrape: bool = False
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+
+
+class AgentResponse(BaseModel):
+    status: str
+    goal: str
+    synthesis: Optional[str] = None
+    search_queries: list[str] = Field(default_factory=list)
+    sources_found: int = 0
+    sources_scraped: int = 0
+    search_results: list[dict[str, str]] = Field(default_factory=list)
+    scraped: list[dict[str, Any]] = Field(default_factory=list)
+    wayback: list[dict[str, Any]] = Field(default_factory=list)
+    question: Optional[str] = None
+
+
+class WaybackRequest(BaseModel):
+    url: HttpUrl
+
+
+class SelfHealRequest(BaseModel):
+    url: HttpUrl
+    selectors: dict[str, str]
 
 
 class ChatResponse(BaseModel):

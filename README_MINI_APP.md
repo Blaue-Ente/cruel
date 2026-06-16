@@ -1,148 +1,93 @@
-# Cruel Mini App v2
+# ArgosScout v3 — Autonomous Knowledge Agent
 
-Мини приложение върху [Cruel](https://github.com/Bishwas-py/cruel) + интеграция с [Scraper.io](https://github.com/Aviral1303/Scraper.io).
+Еволюция от Cruel Mini App → **ArgosScout** — автономен агент за знание, интегриран с Argos екосистемата.
 
-## Възможности
+## Безплатни AI алтернативи
 
-| Модул | Описание |
-|-------|----------|
-| **Quick Scrape** | Cruel + BeautifulSoup — бързо извличане от една страница |
-| **Universal Scrape** | Scraper.io — RSS, HTTP, blog, substack, PDF (4-tier fallback) |
-| **NVIDIA NIM LLM** | Безплатни модели от build.nvidia.com (OpenAI-compatible) |
-| **HuggingFace LLM** | Fallback inference API |
-| **API ключове** | Генериране, списък, revoke |
-| **Dashboard UI** | Пълен админ панел с sidebar навигация |
+| Provider | Скорост | Цена | Ключ |
+|----------|---------|------|------|
+| **Groq** | 800+ tok/s | Безплатен tier | console.groq.com |
+| **NVIDIA NIM** | Бърз | Безплатни модели | build.nvidia.com |
+| **HuggingFace** | Среден | Безплатен tier | huggingface.co |
+| **Ollama** | Локален | 100% безплатен | ollama.com |
+| **DuckDuckGo** | — | Без API ключ | вградено |
+| **Wayback Machine** | — | Безплатен | archive.org |
 
-## Бърз старт
+Auto priority: `Groq → NVIDIA → HuggingFace → Ollama → rule-based`
+
+## Уникални функции
+
+### ArgosScout Agent (автономно търсене)
+```
+Потребител: "Намери Prop Trading фирми за swing trading"
+  → LLM генерира search queries
+  → DuckDuckGo търсене (безплатно)
+  → Паралелен scrape на топ резултати
+  → Wayback Machine temporal анализ
+  → LLM синтезира отговор
+```
+
+### WebSocket Live Stream
+```javascript
+ws = new WebSocket("ws://localhost:8000/ws/agent")
+ws.send(JSON.stringify({ goal: "...", api_key: "cruel_..." }))
+// → thought events в реално време
+```
+
+### Self-Healing Selectors
+Ако CSS селекторите се счупят, LLM анализира DOM и предлага нови:
+```
+POST /api/v1/scrape/self-heal
+{"url": "https://...", "selectors": {"price": ".old-price"}}
+```
+
+### Temporal Data (Wayback Machine)
+```
+POST /api/v1/wayback
+{"url": "https://firm.com/rules"}
+→ "Страницата е променена преди 2 месеца, съдържанието е нараснало с 12KB"
+```
+
+### Semantic DOM Filtering
+Автоматично премахва реклами, cookie банери, навигация (trafilatura + readability).
+
+## API Endpoints
+
+| Endpoint | Описание |
+|----------|----------|
+| `POST /api/v1/agent/research` | Автономно търсене + синтез |
+| `WS /ws/agent` | Live thought stream |
+| `POST /api/v1/wayback` | Wayback temporal анализ |
+| `POST /api/v1/scrape/self-heal` | Self-healing selectors |
+| `POST /api/v1/scrape` | Quick scrape (Cruel) |
+| `POST /api/v1/scrape/universal` | Scraper.io deep scrape |
+| `POST /api/v1/chat` | LLM чатбот |
+
+## Стартиране
 
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
-# Задайте NVIDIA_API_KEY от https://build.nvidia.com
+# GROQ_API_KEY=gsk_...  (препоръчано)
 python3 run_app.py
 ```
 
-Отворете http://localhost:8000
+## Бъдещи интеграции (Argos Ecosystem)
 
-## Конфигурация
+| Проект | ArgosScout роля |
+|--------|-----------------|
+| **StockArgos** | Market signal scraping + EES index |
+| **ArgosWard** | Security policy monitoring |
+| **VaultTreasury** | Financial data extraction |
+| **ArgosAssistant** | Voice/chat interface |
 
-| Променлива | Описание |
-|------------|----------|
-| `NVIDIA_API_KEY` | NVIDIA NIM API ключ (препоръчано) |
-| `NVIDIA_MODEL` | Модел (default: `meta/llama-3.1-8b-instruct`) |
-| `HF_TOKEN` | Hugging Face токен (fallback) |
-| `LLM_PROVIDER` | `auto` \| `nvidia` \| `huggingface` \| `rule` |
-| `SCRAPER_API_KEY` | ScraperAPI proxy (опционално) |
-| `ADMIN_SECRET` | Admin secret за API ключове |
+## Roadmap
 
-### Безплатни NVIDIA модели
-
-- `meta/llama-3.1-8b-instruct`
-- `nvidia/nemotron-mini-4b-instruct`
-- `meta/llama-3.2-3b-instruct`
-- `microsoft/phi-3-mini-128k-instruct`
-- `google/gemma-2-9b-it`
-
-## API Endpoints
-
-### Dashboard & Status
-
-| Метод | Endpoint | Описание |
-|-------|----------|----------|
-| GET | `/api/v1/dashboard` | Статистики + LLM/Scraper.io статус |
-| GET | `/api/v1/llm/status` | NVIDIA/HF provider info |
-| GET | `/api/v1/scrape/capabilities` | Scraper.io стратегии |
-
-### Scrape
-
-| Метод | Endpoint | Описание |
-|-------|----------|----------|
-| POST | `/api/v1/scrape` | Quick scrape (Cruel) |
-| POST | `/api/v1/scrape/universal` | Scraper.io universal scrape |
-| POST | `/api/v1/scrape/universal/batch` | Batch universal scrape |
-
-### Chat & LLM
-
-| Метод | Endpoint | Описание |
-|-------|----------|----------|
-| POST | `/api/v1/chat` | NL команда + optional scrape |
-| POST | `/api/v1/parse` | Pure JSON parsing |
-| POST | `/api/v1/chat/public` | Demo без API ключ |
-
-### Admin
-
-| Метод | Endpoint | Auth |
-|-------|----------|------|
-| POST | `/admin/keys` | X-Admin-Secret |
-| GET | `/admin/keys` | X-Admin-Secret |
-| DELETE | `/admin/keys/{id}` | X-Admin-Secret |
-
-## Примери
-
-### NVIDIA LLM chat
-
-```bash
-curl -X POST http://localhost:8000/api/v1/chat \
-  -H "X-API-Key: cruel_..." \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Universal scrape https://quill.co/blog", "execute_scrape": true, "llm_provider": "nvidia"}'
-```
-
-### Scraper.io universal scrape
-
-```bash
-curl -X POST http://localhost:8000/api/v1/scrape/universal \
-  -H "X-API-Key: cruel_..." \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://quill.co/blog", "max_items": 10}'
-```
-
-### JSON output (Scraper.io format)
-
-```json
-{
-  "team_id": "cruel-app",
-  "items": [
-    {
-      "title": "Article Title",
-      "content": "# Markdown content...",
-      "content_type": "blog",
-      "source_url": "https://...",
-      "author": ""
-    }
-  ],
-  "success": true
-}
-```
-
-## Scraper.io интеграция
-
-Интегриран е [Scraper.io UniversalScraper](https://github.com/Aviral1303/Scraper.io) с 4-tier fallback:
-
-1. **RSS** — най-бърз за блогове
-2. **HTTP + trafilatura** — статични страници
-3. **Browser (Playwright)** — JS-heavy сайтове (опционално)
-4. **Aggressive (Selenium)** — last resort (опционално)
-
-За пълна функционалност:
-```bash
-pip install playwright selenium webdriver-manager
-playwright install
-```
-
-## Архитектура
-
-```
-Dashboard UI
-     │
-     ▼
- FastAPI (app/)
- ├── Quick Scrape → cruel.session
- ├── Universal Scrape → app/scraperio/ (Scraper.io)
- ├── LLM Chat → NVIDIA NIM / HuggingFace / rule-based
- └── API Keys → SQLite
-```
+- [ ] Vision scraping (Playwright screenshot + NVIDIA vision model)
+- [ ] Predictive pre-scraping (context-aware background research)
+- [ ] StockArgos webhook integration
+- [ ] Playwright stealth mode for Cloudflare bypass
 
 ## Лиценз
 
-GPL-3.0 (Cruel) · Scraper.io компоненти: MIT (оригинален repo)
+GPL-3.0 (Cruel) · Scraper.io: MIT

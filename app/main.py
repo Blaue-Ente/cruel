@@ -1,14 +1,18 @@
+import json
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.agent import run_agent, stream_agent_thoughts
 from app.auth import require_admin, require_api_key
-from app.config import BASE_DIR, SCRAPER_API_KEY
+from app.config import APP_NAME, BASE_DIR, SCRAPER_API_KEY
 from app.llm import build_chat_reply, get_llm_status, parse_user_command
 from app.models import (
+    AgentRequest,
+    AgentResponse,
     ApiKeyCreate,
     ApiKeyListItem,
     ApiKeyResponse,
@@ -18,10 +22,13 @@ from app.models import (
     LLMCommandJSON,
     ScrapeRequest,
     ScrapeResponse,
+    SelfHealRequest,
     UniversalScrapeBatchRequest,
     UniversalScrapeRequest,
+    WaybackRequest,
 )
 from app.scraper import scrape_url
+from app.self_heal import extract_with_healing
 from app.store import (
     create_api_key,
     get_dashboard_stats,
@@ -29,12 +36,16 @@ from app.store import (
     list_api_keys,
     log_scrape,
     revoke_api_key,
+    validate_api_key,
 )
 from app.universal_scraper import (
     get_scraper_capabilities,
     universal_scrape,
     universal_scrape_batch,
 )
+from app.wayback import temporal_analysis
+
+import requests
 
 
 @asynccontextmanager
@@ -44,9 +55,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Cruel Mini App",
-    description="API keys, web scraping (Cruel + Scraper.io), and LLM admin",
-    version="2.0.0",
+    title=APP_NAME,
+    description="ArgosScout — Autonomous Knowledge Agent (Cruel + Scraper.io)",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -61,11 +72,11 @@ async def root():
 
 @app.get("/health")
 async def health():
-    llm = get_llm_status()
     return {
         "status": "ok",
+        "app": APP_NAME,
         "scraper_api_configured": bool(SCRAPER_API_KEY),
-        "llm": llm,
+        "llm": get_llm_status(),
         "scraperio": get_scraper_capabilities(),
     }
 
@@ -88,13 +99,12 @@ async def llm_status():
     return get_llm_status()
 
 
-# --- Admin: API Key Management ---
+# --- Admin ---
 
 
 @app.post("/admin/keys", response_model=ApiKeyResponse, dependencies=[Depends(require_admin)])
 async def admin_create_key(body: ApiKeyCreate):
-    record = create_api_key(body.name, body.expires_days)
-    return ApiKeyResponse(**record)
+    return ApiKeyResponse(**create_api_key(body.name, body.expires_days))
 
 
 @app.get("/admin/keys", response_model=list[ApiKeyListItem], dependencies=[Depends(require_admin)])
@@ -109,7 +119,7 @@ async def admin_revoke_key(key_id: str):
     return {"revoked": True, "id": key_id}
 
 
-# --- API v1: Scrape & Chat ---
+# --- Scrape ---
 
 
 @app.post("/api/v1/scrape", response_model=ScrapeResponse)
@@ -119,10 +129,8 @@ async def api_scrape(body: ScrapeRequest, _key: dict = Depends(require_api_key))
         log_scrape(str(body.url), "quick", items_count=1, success=True)
         return result
     except ValueError as e:
-        log_scrape(str(body.url), "quick", success=False)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        log_scrape(str(body.url), "quick", success=False)
         raise HTTPException(status_code=502, detail=f"Scrape failed: {e}")
 
 
@@ -130,27 +138,20 @@ async def api_scrape(body: ScrapeRequest, _key: dict = Depends(require_api_key))
 async def api_universal_scrape(body: UniversalScrapeRequest, _key: dict = Depends(require_api_key)):
     try:
         result = universal_scrape(
-            url=str(body.url),
-            author=body.author,
-            content_type=body.content_type,
-            max_items=body.max_items,
+            url=str(body.url), author=body.author,
+            content_type=body.content_type, max_items=body.max_items,
             production_mode=body.production_mode,
         )
-        items_count = len(result.get("items", []))
-        log_scrape(str(body.url), "universal", items_count=items_count, success=result.get("success", True))
+        log_scrape(str(body.url), "universal", items_count=len(result.get("items", [])), success=result.get("success", True))
         return result
     except Exception as e:
-        log_scrape(str(body.url), "universal", success=False)
         raise HTTPException(status_code=502, detail=f"Universal scrape failed: {e}")
 
 
 @app.post("/api/v1/scrape/universal/batch")
 async def api_universal_scrape_batch(body: UniversalScrapeBatchRequest, _key: dict = Depends(require_api_key)):
     try:
-        result = universal_scrape_batch(body.sources, max_items=body.max_items)
-        for src in body.sources:
-            log_scrape(src.get("url", "batch"), "universal_batch", items_count=len(result.get("items", [])))
-        return result
+        return universal_scrape_batch(body.sources, max_items=body.max_items)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Batch scrape failed: {e}")
 
@@ -160,45 +161,107 @@ async def scrape_capabilities():
     return get_scraper_capabilities()
 
 
+@app.post("/api/v1/scrape/self-heal")
+async def api_self_heal(body: SelfHealRequest, _key: dict = Depends(require_api_key)):
+    try:
+        resp = requests.get(str(body.url), timeout=15, headers={"User-Agent": "ArgosScout/1.0"})
+        result = extract_with_healing(resp.text, body.selectors, str(body.url))
+        return {"url": str(body.url), "extracted": result, "status_code": resp.status_code}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/v1/wayback")
+async def api_wayback(body: WaybackRequest, _key: dict = Depends(require_api_key)):
+    return temporal_analysis(str(body.url))
+
+
+# --- ArgosScout Agent ---
+
+
+@app.post("/api/v1/agent/research", response_model=AgentResponse)
+async def api_agent_research(body: AgentRequest, _key: dict = Depends(require_api_key)):
+    result = await run_agent(
+        body.goal, provider=body.llm_provider, model=body.llm_model,
+        use_wayback=body.use_wayback, deep_scrape=body.deep_scrape,
+    )
+    log_scrape(body.goal[:100], "agent", items_count=result.get("sources_scraped", 0))
+    if result.get("status") == "clarification_needed":
+        return AgentResponse(status="clarification_needed", goal=body.goal, question=result.get("question"))
+    return AgentResponse(
+        status=result["status"], goal=result["goal"],
+        synthesis=result.get("synthesis"),
+        search_queries=result.get("search_queries", []),
+        sources_found=result.get("sources_found", 0),
+        sources_scraped=result.get("sources_scraped", 0),
+        search_results=result.get("search_results", []),
+        scraped=result.get("scraped", []),
+        wayback=result.get("wayback", []),
+    )
+
+
+@app.websocket("/ws/agent")
+async def ws_agent(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        raw = await websocket.receive_text()
+        payload = json.loads(raw)
+        api_key = payload.get("api_key", "")
+        if api_key and not validate_api_key(api_key):
+            await websocket.send_json({"type": "error", "text": "Invalid API key"})
+            await websocket.close()
+            return
+
+        goal = payload.get("goal", payload.get("message", ""))
+        if not goal:
+            await websocket.send_json({"type": "error", "text": "Missing goal"})
+            return
+
+        async for event in stream_agent_thoughts(
+            goal,
+            provider=payload.get("llm_provider"),
+            model=payload.get("llm_model"),
+        ):
+            await websocket.send_json(event)
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        await websocket.send_json({"type": "error", "text": str(e)})
+
+
+# --- Chat ---
+
+
 @app.post("/api/v1/chat", response_model=ChatResponse)
 async def api_chat(body: ChatRequest, _key: dict = Depends(require_api_key)):
     command = parse_user_command(body.message, body.llm_provider, body.llm_model)
     scrape_result: Optional[ScrapeResponse] = None
     universal_result: Optional[dict[str, Any]] = None
+    agent_result: Optional[dict[str, Any]] = None
     extra = None
 
-    if command.intent.value == "admin":
-        extra = "Admin actions require X-Admin-Secret header on /admin/keys endpoints."
-
-    if body.execute_scrape and command.urls:
+    if body.execute_scrape and command.intent.value == "agent_research":
+        agent_result = await run_agent(body.message, body.llm_provider, body.llm_model)
+        extra = agent_result.get("synthesis", "")[:500]
+    elif body.execute_scrape and command.urls:
         try:
-            if command.scrape_mode == "universal" or command.intent.value == "universal_scrape":
+            if command.scrape_mode in ("universal",) or command.intent.value == "universal_scrape":
                 universal_result = universal_scrape(command.urls[0])
-                items = len(universal_result.get("items", []))
-                log_scrape(command.urls[0], "universal", items_count=items)
-                extra = f"Scraper.io OK — {items} items extracted"
+                extra = f"Scraper.io OK — {len(universal_result.get('items', []))} items"
             else:
-                scrape_result = scrape_url(
-                    ScrapeRequest(
-                        url=command.urls[0],
-                        extract=command.extract,
-                        selectors=command.selectors or None,
-                    )
-                )
-                log_scrape(command.urls[0], "quick", items_count=1)
+                scrape_result = scrape_url(ScrapeRequest(url=command.urls[0], extract=command.extract))
                 extra = f"Quick scrape OK — status {scrape_result.status_code}"
         except Exception as e:
             extra = f"Scrape failed: {e}"
 
     reply = build_chat_reply(command, extra)
-
     if body.json_only:
         return JSONResponse(content={
             "command": command.model_dump(),
             "scrape_result": scrape_result.model_dump() if scrape_result else None,
             "universal_result": universal_result,
+            "agent_result": agent_result,
         })
-
     return ChatResponse(reply=reply, command=command, scrape_result=scrape_result)
 
 

@@ -3,3 +3,7 @@ venv/
 dist/
 cruel.egg-info/
 env.py
+data/
+.env
+__pycache__/
+*.pyc

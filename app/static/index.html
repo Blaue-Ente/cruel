@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cruel Dashboard — Scrape + Scraper.io + NVIDIA LLM</title>
+  <link rel="stylesheet" href="/static/dashboard.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <h1><span>Cruel</span> Dashboard</h1>
+      <p>Cruel + Scraper.io + NVIDIA NIM</p>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span>Dashboard</span></button>
+      <button class="nav-item" data-page="chat"><span class="nav-icon">🤖</span><span>LLM Чатбот</span></button>
+      <button class="nav-item" data-page="quick"><span class="nav-icon">⚡</span><span>Quick Scrape</span></button>
+      <button class="nav-item" data-page="universal"><span class="nav-icon">🌐</span><span>Universal Scrape</span></button>
+      <button class="nav-item" data-page="keys"><span class="nav-icon">🔑</span><span>API Ключове</span></button>
+      <button class="nav-item" data-page="settings"><span class="nav-icon">⚙️</span><span>Настройки</span></button>
+    </nav>
+    <div class="sidebar-footer">
+      <div id="sidebar-status">Зареждане...</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <h2 id="page-title">Dashboard</h2>
+      <div class="topbar-actions">
+        <span class="badge badge-blue">v2.0</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- DASHBOARD -->
+      <section id="page-dashboard" class="page active">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Активни API ключове</div>
+            <div class="stat-value" id="stat-keys">—</div>
+            <div class="stat-sub" id="stat-keys-sub">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Общо scrapes</div>
+            <div class="stat-value" id="stat-scrapes">—</div>
+            <div class="stat-sub">Quick + Universal</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">LLM Provider</div>
+            <div class="stat-value" id="stat-llm" style="font-size:1.1rem">—</div>
+            <div class="stat-sub" id="stat-llm-sub">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Scraper.io стратегии</div>
+            <div class="stat-value" id="stat-scraperio">—</div>
+            <div class="stat-sub" id="stat-scraperio-sub">—</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">Scraper.io Capabilities</div>
+            <div class="card-body">
+              <pre id="dash-capabilities" class="json-view">Loading...</pre>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">LLM Status (NVIDIA / HuggingFace)</div>
+            <div class="card-body">
+              <pre id="dash-llm" class="json-view">Loading...</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-info" style="margin-top:1.25rem">
+          <strong>Бърз старт:</strong> Settings → въведете NVIDIA API ключ (build.nvidia.com) → API Keys → генерирайте ключ → Chat или Scrape.
+        </div>
+      </section>
+
+      <!-- CHAT -->
+      <section id="page-chat" class="page">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              LLM Администратор
+              <div class="toggle-row" style="margin:0">
+                <input type="checkbox" id="chat-json" />
+                <label for="chat-json" style="margin:0">JSON режим</label>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="chips">
+                <span class="chip" data-msg="Кои сайтове за имоти в България?">Имоти BG</span>
+                <span class="chip" data-msg="Universal scrape https://quill.co/blog">Universal blog</span>
+                <span class="chip" data-msg="Scrape https://example.com">Quick scrape</span>
+                <span class="chip" data-msg="Какво можеш да правиш?">Помощ</span>
+              </div>
+              <div id="chat-messages" class="chat-box">
+                <div class="msg msg-sys">Команди на български/английски. NVIDIA NIM или HuggingFace LLM.</div>
+              </div>
+              <textarea id="chat-input" placeholder="Напр: Извлечи всички статии от https://example.com/blog"></textarea>
+              <div class="row">
+                <div class="toggle-row">
+                  <input type="checkbox" id="chat-execute" />
+                  <label for="chat-execute" style="margin:0">Изпълни scrape</label>
+                </div>
+                <button class="btn btn-primary" id="btn-send-chat" style="flex:0">Изпрати</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">LLM JSON Output</div>
+            <div class="card-body">
+              <pre id="chat-json-out" class="json-view">// Structured JSON for LLM-to-LLM communication</pre>
+              <p style="color:var(--muted);font-size:.76rem;margin-top:.75rem">
+                API: <code>POST /api/v1/parse</code> · <code>POST /api/v1/chat?json_only=true</code>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- QUICK SCRAPE -->
+      <section id="page-quick" class="page">
+        <div class="card">
+          <div class="card-header">Quick Scrape (Cruel + BeautifulSoup)</div>
+          <div class="card-body">
+            <p style="color:var(--muted);font-size:.84rem;margin-bottom:1rem">
+              Бързо извличане на една страница — title, text, links, meta. Опционално ScraperAPI proxy.
+            </p>
+            <div class="row">
+              <div style="flex:2">
+                <label>URL</label>
+                <input type="url" id="quick-url" placeholder="https://example.com" />
+              </div>
+              <div>
+                <label>Extract полета</label>
+                <input type="text" id="quick-extract" value="title,text,links,meta" />
+              </div>
+            </div>
+            <button class="btn btn-primary" id="btn-quick-scrape">Scrape</button>
+            <pre id="quick-result" class="json-view" style="margin-top:1rem">// Result</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- UNIVERSAL SCRAPE -->
+      <section id="page-universal" class="page">
+        <div class="card">
+          <div class="card-header">Universal Scrape (Scraper.io)</div>
+          <div class="card-body">
+            <div class="alert alert-info">
+              Scraper.io използва 4-tier fallback: RSS → HTTP → Browser (Playwright) → Aggressive (Selenium).
+              Леките стратегии работят без Chrome/Playwright.
+            </div>
+            <div class="row">
+              <div style="flex:2">
+                <label>Blog / Site URL</label>
+                <input type="url" id="univ-url" placeholder="https://quill.co/blog" />
+              </div>
+              <div>
+                <label>Max items</label>
+                <input type="number" id="univ-max" value="15" min="1" max="50" />
+              </div>
+            </div>
+            <button class="btn btn-primary" id="btn-univ-scrape">Universal Scrape</button>
+            <pre id="univ-result" class="json-view" style="margin-top:1rem">// Scraper.io result (team_id, items[])</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- API KEYS -->
+      <section id="page-keys" class="page">
+        <div class="card">
+          <div class="card-header">API Ключове</div>
+          <div class="card-body">
+            <div id="new-key-alert" class="alert alert-success hidden">
+              Нов ключ (запазете го!): <code id="new-key-value"></code>
+            </div>
+            <div class="row">
+              <div>
+                <label>Име на ключа</label>
+                <input type="text" id="key-name" value="my-key" />
+              </div>
+              <div style="flex:0">
+                <label>&nbsp;</label>
+                <button class="btn btn-primary" id="btn-create-key">Генерирай ключ</button>
+              </div>
+            </div>
+            <table class="key-table">
+              <thead>
+                <tr><th>Ключ</th><th>Uses</th><th>Статус</th><th>Създаден</th><th></th></tr>
+              </thead>
+              <tbody id="keys-tbody">
+                <tr><td colspan="5" style="color:var(--muted)">Въведете Admin Secret в Settings</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section id="page-settings" class="page">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">Автентикация</div>
+            <div class="card-body">
+              <label>Admin Secret (X-Admin-Secret)</label>
+              <input type="password" id="set-admin-secret" placeholder="cruel-admin-change-me" />
+              <label>API Key (X-API-Key)</label>
+              <input type="password" id="set-api-key" placeholder="cruel_..." />
+              <div id="settings-saved" class="alert alert-success hidden">Настройките са запазени локално.</div>
+              <button class="btn btn-primary" id="btn-save-settings">Запази</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">LLM Provider</div>
+            <div class="card-body">
+              <div class="provider-card active">
+                <div class="provider-title">NVIDIA NIM (препоръчано)</div>
+                <div class="provider-desc">Безплатни модели на build.nvidia.com · OpenAI-compatible API</div>
+              </div>
+              <label>Provider</label>
+              <select id="set-llm-provider">
+                <option value="auto">Auto (NVIDIA → HF → Rule)</option>
+                <option value="nvidia">NVIDIA NIM</option>
+                <option value="huggingface">Hugging Face</option>
+                <option value="rule">Rule-based (без LLM)</option>
+              </select>
+              <label>Модел</label>
+              <select id="set-llm-model"></select>
+              <div class="alert alert-info" style="margin-top:.5rem">
+                NVIDIA ключ: задайте <code>NVIDIA_API_KEY</code> в .env на сървъра.
+                HF ключ: <code>HF_TOKEN</code>. ScraperAPI: <code>SCRAPER_API_KEY</code>.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>

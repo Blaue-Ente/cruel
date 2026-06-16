@@ -29,10 +29,35 @@ class ChatRequest(BaseModel):
     message: str
     execute_scrape: bool = False
     json_only: bool = False
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+
+
+class UniversalScrapeRequest(BaseModel):
+    url: HttpUrl
+    author: str = ""
+    content_type: str = "blog"
+    max_items: int = Field(default=15, ge=1, le=50)
+    production_mode: bool = True
+
+
+class UniversalScrapeBatchRequest(BaseModel):
+    sources: list[dict[str, str]]
+    max_items: int = Field(default=30, ge=1, le=100)
+
+
+class DashboardStats(BaseModel):
+    total_api_keys: int
+    active_api_keys: int
+    total_scrapes: int
+    scraper_api_configured: bool
+    llm: dict[str, Any]
+    scraperio: dict[str, Any]
 
 
 class IntentType(str, Enum):
     SCRAPE = "scrape"
+    UNIVERSAL_SCRAPE = "universal_scrape"
     SEARCH_SITES = "search_sites"
     ADMIN = "admin"
     HELP = "help"
@@ -51,6 +76,7 @@ class LLMCommandJSON(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
     suggested_sites: list[dict[str, str]] = Field(default_factory=list)
     admin_action: Optional[str] = None
+    scrape_mode: str = "quick"
 
 
 class ChatResponse(BaseModel):

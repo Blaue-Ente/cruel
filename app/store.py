@@ -33,6 +33,18 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS scrape_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                items_count INTEGER DEFAULT 0,
+                success INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
 
 
@@ -140,4 +152,30 @@ def validate_api_key(raw_key: str) -> Optional[dict]:
         "id": row["id"],
         "name": row["name"],
         "key_prefix": row["key_prefix"],
+    }
+
+
+def log_scrape(url: str, mode: str, items_count: int = 0, success: bool = True) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO scrape_logs (url, mode, items_count, success, created_at) VALUES (?, ?, ?, ?, ?)",
+            (url, mode, items_count, int(success), _utcnow().isoformat()),
+        )
+        conn.commit()
+
+
+def get_dashboard_stats() -> dict:
+    with get_connection() as conn:
+        keys = conn.execute("SELECT is_active, usage_count FROM api_keys").fetchall()
+        scrape_count = conn.execute("SELECT COUNT(*) as c FROM scrape_logs").fetchone()["c"]
+
+    total_keys = len(keys)
+    active_keys = sum(1 for k in keys if k["is_active"])
+    total_usage = sum(k["usage_count"] for k in keys)
+
+    return {
+        "total_api_keys": total_keys,
+        "active_api_keys": active_keys,
+        "total_scrapes": scrape_count,
+        "total_api_usage": total_usage,
     }

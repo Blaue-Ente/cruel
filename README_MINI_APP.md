@@ -1,17 +1,24 @@
-# Cruel Mini App
+# Cruel Mini App v2
 
-Мини приложение върху [Cruel](https://github.com/Bishwas-py/cruel) — Python библиотека за web scraping. Добавя:
+Мини приложение върху [Cruel](https://github.com/Bishwas-py/cruel) + интеграция с [Scraper.io](https://github.com/Aviral1303/Scraper.io).
 
-- **API ключове** — генериране и управление на потребителски ключове
-- **REST API за scrape** — структуриран JSON изход (title, text, links, meta, custom selectors)
-- **LLM чатбот администратор** — разбира команди на български/английски и връща структуриран JSON
-- **Web UI** — админ панел + чат интерфейс
+## Възможности
+
+| Модул | Описание |
+|-------|----------|
+| **Quick Scrape** | Cruel + BeautifulSoup — бързо извличане от една страница |
+| **Universal Scrape** | Scraper.io — RSS, HTTP, blog, substack, PDF (4-tier fallback) |
+| **NVIDIA NIM LLM** | Безплатни модели от build.nvidia.com (OpenAI-compatible) |
+| **HuggingFace LLM** | Fallback inference API |
+| **API ключове** | Генериране, списък, revoke |
+| **Dashboard UI** | Пълен админ панел с sidebar навигация |
 
 ## Бърз старт
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env   # настройте SCRAPER_API_KEY, HF_TOKEN, ADMIN_SECRET
+cp .env.example .env
+# Задайте NVIDIA_API_KEY от https://build.nvidia.com
 python3 run_app.py
 ```
 
@@ -21,115 +28,121 @@ python3 run_app.py
 
 | Променлива | Описание |
 |------------|----------|
-| `SCRAPER_API_KEY` | ScraperAPI ключ (опционално — без него се ползва директен fetch) |
-| `HF_TOKEN` | Hugging Face токен за безплатен LLM (опционално — fallback rule-based parser) |
-| `LLM_MODEL` | HF модел (по подразбиране: `HuggingFaceH4/zephyr-7b-beta`) |
-| `ADMIN_SECRET` | Секрет за управление на API ключове |
+| `NVIDIA_API_KEY` | NVIDIA NIM API ключ (препоръчано) |
+| `NVIDIA_MODEL` | Модел (default: `meta/llama-3.1-8b-instruct`) |
+| `HF_TOKEN` | Hugging Face токен (fallback) |
+| `LLM_PROVIDER` | `auto` \| `nvidia` \| `huggingface` \| `rule` |
+| `SCRAPER_API_KEY` | ScraperAPI proxy (опционално) |
+| `ADMIN_SECRET` | Admin secret за API ключове |
+
+### Безплатни NVIDIA модели
+
+- `meta/llama-3.1-8b-instruct`
+- `nvidia/nemotron-mini-4b-instruct`
+- `meta/llama-3.2-3b-instruct`
+- `microsoft/phi-3-mini-128k-instruct`
+- `google/gemma-2-9b-it`
 
 ## API Endpoints
 
-### Admin (изисква `X-Admin-Secret`)
+### Dashboard & Status
 
 | Метод | Endpoint | Описание |
 |-------|----------|----------|
-| POST | `/admin/keys` | Генерира нов API ключ |
-| GET | `/admin/keys` | Списък с ключове |
-| DELETE | `/admin/keys/{id}` | Отнема ключ |
-
-### API v1 (изисква `X-API-Key`)
-
-| Метод | Endpoint | Описание |
-|-------|----------|----------|
-| POST | `/api/v1/scrape` | Scrape URL → JSON |
-| POST | `/api/v1/chat` | NL команда → отговор + JSON command |
-| POST | `/api/v1/parse` | Само JSON parsing (за LLM-to-LLM) |
-
-### Публичен demo
-
-| Метод | Endpoint | Описание |
-|-------|----------|----------|
-| POST | `/api/v1/chat/public` | Чат без API ключ (без scrape) |
-
-## Примери
-
-### Генериране на API ключ
-
-```bash
-curl -X POST http://localhost:8000/admin/keys \
-  -H "X-Admin-Secret: cruel-admin-change-me" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "my-app"}'
-```
+| GET | `/api/v1/dashboard` | Статистики + LLM/Scraper.io статус |
+| GET | `/api/v1/llm/status` | NVIDIA/HF provider info |
+| GET | `/api/v1/scrape/capabilities` | Scraper.io стратегии |
 
 ### Scrape
 
-```bash
-curl -X POST http://localhost:8000/api/v1/scrape \
-  -H "X-API-Key: cruel_..." \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com", "extract": ["title", "text", "links"]}'
-```
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| POST | `/api/v1/scrape` | Quick scrape (Cruel) |
+| POST | `/api/v1/scrape/universal` | Scraper.io universal scrape |
+| POST | `/api/v1/scrape/universal/batch` | Batch universal scrape |
 
-### LLM чат (JSON режим)
+### Chat & LLM
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| POST | `/api/v1/chat` | NL команда + optional scrape |
+| POST | `/api/v1/parse` | Pure JSON parsing |
+| POST | `/api/v1/chat/public` | Demo без API ключ |
+
+### Admin
+
+| Метод | Endpoint | Auth |
+|-------|----------|------|
+| POST | `/admin/keys` | X-Admin-Secret |
+| GET | `/admin/keys` | X-Admin-Secret |
+| DELETE | `/admin/keys/{id}` | X-Admin-Secret |
+
+## Примери
+
+### NVIDIA LLM chat
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat \
   -H "X-API-Key: cruel_..." \
   -H "Content-Type: application/json" \
-  -d '{"message": "Кои сайтове за имоти в България?", "json_only": true}'
+  -d '{"message": "Universal scrape https://quill.co/blog", "execute_scrape": true, "llm_provider": "nvidia"}'
 ```
 
-### Директен JSON parse (за друг LLM)
+### Scraper.io universal scrape
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/parse \
+curl -X POST http://localhost:8000/api/v1/scrape/universal \
   -H "X-API-Key: cruel_..." \
   -H "Content-Type: application/json" \
-  -d '{"message": "Scrape https://www.fiverr.com/user/gig-slug"}'
+  -d '{"url": "https://quill.co/blog", "max_items": 10}'
 ```
 
-## LLM JSON Schema
-
-Чатботът връща структуриран обект за бърза комуникация с други LLM агенти:
+### JSON output (Scraper.io format)
 
 ```json
 {
-  "intent": "scrape | search_sites | admin | help | chat",
-  "urls": ["https://..."],
-  "selectors": {"price": ".price-tag"},
-  "extract": ["title", "text", "links", "meta"],
-  "query": "оригинално съобщение",
-  "explanation": "обяснение",
-  "confidence": 0.85,
-  "suggested_sites": [{"name": "...", "url": "...", "note": "..."}],
-  "admin_action": null
+  "team_id": "cruel-app",
+  "items": [
+    {
+      "title": "Article Title",
+      "content": "# Markdown content...",
+      "content_type": "blog",
+      "source_url": "https://...",
+      "author": ""
+    }
+  ],
+  "success": true
 }
+```
+
+## Scraper.io интеграция
+
+Интегриран е [Scraper.io UniversalScraper](https://github.com/Aviral1303/Scraper.io) с 4-tier fallback:
+
+1. **RSS** — най-бърз за блогове
+2. **HTTP + trafilatura** — статични страници
+3. **Browser (Playwright)** — JS-heavy сайтове (опционално)
+4. **Aggressive (Selenium)** — last resort (опционално)
+
+За пълна функционалност:
+```bash
+pip install playwright selenium webdriver-manager
+playwright install
 ```
 
 ## Архитектура
 
 ```
-Client / LLM Agent
-       │
-       ▼
-  FastAPI (app/)
-  ├── /admin/keys     → SQLite (API keys)
-  ├── /api/v1/scrape  → cruel.session → ScraperAPI (optional)
-  ├── /api/v1/chat    → HF Inference LLM → JSON command
-  └── /api/v1/parse   → pure JSON for LLM-to-LLM
-```
-
-## Оригинална Cruel библиотека
-
-`cruel` остава непроменена — pip пакет за scraping с BeautifulSoup + ScraperAPI.
-
-```python
-from cruel import session
-session.set_scraper_api_key("YOUR_KEY")
-response = session.get("https://example.com")
-print(response.soup)
+Dashboard UI
+     │
+     ▼
+ FastAPI (app/)
+ ├── Quick Scrape → cruel.session
+ ├── Universal Scrape → app/scraperio/ (Scraper.io)
+ ├── LLM Chat → NVIDIA NIM / HuggingFace / rule-based
+ └── API Keys → SQLite
 ```
 
 ## Лиценз
 
-GPL-3.0 (наследен от Cruel)
+GPL-3.0 (Cruel) · Scraper.io компоненти: MIT (оригинален repo)

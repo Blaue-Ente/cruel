@@ -1,4 +1,4 @@
-# ArgosScout v3 — Autonomous Knowledge Agent
+# ArgosScout v6 — Smart Detective + Privacy Layers
 
 Еволюция от Cruel Mini App → **ArgosScout** — автономен агент за знание, интегриран с Argos екосистемата.
 
@@ -94,6 +94,48 @@ GET /api/v1/probe/pheromones   # sweet/poison routing memory
 
 **Pheromones:** Sweet = добър източник, Poison = CAPTCHA/block → swarm избягва. v5: Redis primary, SQLite fallback.
 
+## Privacy Layers (Слоеве на поверителност) — v6.0
+
+Risk-based compliance: различни инструменти според юрисдикцията и риска.
+
+| Layer | Код | Описание |
+|-------|-----|----------|
+| 👻 Ghost | `ghost` | Пасивен: Common Crawl, Wayback, JSON-LD — нулев live риск |
+| Standard | `standard` | Глобален: API echo + SEO + scrape, лек PII филтър |
+| 🇪🇺 EU Shield | `eu_shield` | Пълен GDPR, robots.txt, probe само dry_run |
+| 🇩🇪 DE Fortress | `de_fortress` | Германия: най-строг GDPR, маскиране на лични имейли |
+| 🎯 Hunter | `hunter` | Агресивен (ROW): пълен probe arsenal |
+
+Auto-resolve: `DE` → de_fortress · EU → eu_shield · US → standard
+
+```bash
+# Smart Detective pipeline (layer-aware)
+POST /api/v1/intelligence/detective
+{"url": "https://...", "privacy_layer": "de_fortress", "country": "DE"}
+
+# SEO Autopsy — JSON-LD, OpenGraph, Sitemap
+POST /api/v1/scrape/seo-autopsy
+{"url": "https://course-site.com"}
+
+# API Echo — official APIs first
+POST /api/v1/scrape/api-echo
+{"url": "https://github.com/org/repo"}
+
+# Common Crawl — passive archive
+POST /api/v1/passive/common-crawl
+{"url": "https://example.com", "keyword": "pricing"}
+
+# OSINT + Trust Score
+POST /api/v1/osint/investigate
+{"name": "...", "tiktok_url": "...", "country": "DE", "privacy_layer": "de_fortress"}
+
+# GDPR scan
+POST /api/v1/compliance/gdpr-scan
+{"text": "...", "privacy_layer": "de_fortress"}
+
+GET /api/v1/compliance/layers
+```
+
 ## v5.0 — Multimodal + Inbox + StockArgos
 
 | Функция | Описание |
@@ -166,6 +208,12 @@ python3 run_app.py
 - [x] IMAP inbox integration (real email form responses)
 - [x] Redis pheromones (SQLite fallback)
 - [x] StockArgos webhook integration
+- [x] Privacy Layers (ghost/standard/eu_shield/de_fortress/hunter)
+- [x] SEO Autopsy (JSON-LD, OpenGraph, Sitemap)
+- [x] API Echo (GitHub, Reddit, HN + discovery)
+- [x] Common Crawl passive scraping
+- [x] OSINT Synthesis + Trust Score
+- [x] GDPR Anonymizer gate
 - [ ] Playwright stealth mode for Cloudflare bypass
 
 ## Лиценз

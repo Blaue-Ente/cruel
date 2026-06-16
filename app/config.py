@@ -94,6 +94,11 @@ INBOX_POLL_INTERVAL_SEC = int(os.getenv("INBOX_POLL_INTERVAL_SEC", "120"))
 STOCKARGOS_WEBHOOK_URL = os.getenv("STOCKARGOS_WEBHOOK_URL", "")
 STOCKARGOS_WEBHOOK_SECRET = os.getenv("STOCKARGOS_WEBHOOK_SECRET", "")
 
+# Privacy Layers (Слоеве на поверителност)
+# ghost | standard | eu_shield | de_fortress | hunter
+DEFAULT_PRIVACY_LAYER = os.getenv("DEFAULT_PRIVACY_LAYER", "standard").lower()
+COMPLIANCE_COUNTRY = os.getenv("COMPLIANCE_COUNTRY", "").upper()  # DE, BG, US — auto-resolves layer
+
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "cruel-admin-change-me")
 APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("APP_PORT", "8000"))

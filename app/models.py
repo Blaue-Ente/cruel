@@ -66,6 +66,14 @@ class IntentType(str, Enum):
     CHAT = "chat"
 
 
+class PrivacyLayerType(str, Enum):
+    GHOST = "ghost"
+    STANDARD = "standard"
+    EU_SHIELD = "eu_shield"
+    DE_FORTRESS = "de_fortress"
+    HUNTER = "hunter"
+
+
 class LLMCommandJSON(BaseModel):
     """Structured JSON for LLM-to-LLM and API communication."""
 
@@ -90,6 +98,9 @@ class AgentRequest(BaseModel):
     deep_scrape: bool = False
     llm_provider: Optional[str] = None
     llm_model: Optional[str] = None
+    privacy_layer: Optional[str] = None
+    country: Optional[str] = None
+    passive_only: bool = False
 
 
 class AgentResponse(BaseModel):
@@ -145,6 +156,8 @@ class ProbeRequest(BaseModel):
     swarm_workers: int = Field(default=5, ge=1, le=10)
     llm_provider: Optional[str] = None
     emit_stockargos: bool = False
+    privacy_layer: Optional[str] = None
+    country: Optional[str] = None
 
 
 class TikTokAnalyzeRequest(BaseModel):
@@ -159,6 +172,47 @@ class StockArgosSignalRequest(BaseModel):
     source_url: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
     auto_deliver: bool = True
+
+
+class DetectiveScrapeRequest(BaseModel):
+    url: HttpUrl
+    goal: str = ""
+    privacy_layer: Optional[str] = None
+    country: Optional[str] = None
+    passive_only: bool = False
+    llm_provider: Optional[str] = None
+
+
+class SeoAutopsyRequest(BaseModel):
+    url: HttpUrl
+    fetch_sitemap: bool = True
+
+
+class ApiEchoRequest(BaseModel):
+    url: HttpUrl
+    llm_provider: Optional[str] = None
+
+
+class CommonCrawlRequest(BaseModel):
+    url: HttpUrl
+    limit: int = Field(default=10, ge=1, le=50)
+    keyword: Optional[str] = None
+
+
+class OsintInvestigateRequest(BaseModel):
+    name: str = ""
+    url: str = ""
+    tiktok_url: str = ""
+    company_name: str = ""
+    country: str = "DE"
+    privacy_layer: Optional[str] = None
+    llm_provider: Optional[str] = None
+
+
+class GdprScanRequest(BaseModel):
+    text: str
+    privacy_layer: Optional[str] = None
+    country: Optional[str] = None
 
 
 class ChatResponse(BaseModel):

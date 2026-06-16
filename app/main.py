@@ -9,7 +9,15 @@ from fastapi.staticfiles import StaticFiles
 
 from app.agent import run_agent, stream_agent_thoughts
 from app.auth import require_admin, require_api_key
-from app.config import APP_NAME, BASE_DIR, SCRAPER_API_KEY, STOCKARGOS_WEBHOOK_URL
+from app.config import APP_NAME, BASE_DIR, COMPLIANCE_COUNTRY, DEFAULT_PRIVACY_LAYER, SCRAPER_API_KEY, STOCKARGOS_WEBHOOK_URL
+from app.compliance.policy import PolicyEngine, get_policy_status
+from app.compliance.gdpr_gate import apply_gdpr_gate, scan_for_pii
+from app.compliance.layers import list_layers, resolve_layer
+from app.seo_autopsy import seo_autopsy
+from app.api_echo import api_echo
+from app.passive.commoncrawl import common_crawl_lookup, common_crawl_search_text
+from app.osint.investigate import investigate
+from app.intelligence.pipeline import detective_scrape
 from app.llm import build_chat_reply, get_llm_status, parse_user_command
 from app.predictive import (
     get_suggestions_for_context,
@@ -43,6 +51,12 @@ from app.models import (
     ProbeRequest,
     StockArgosSignalRequest,
     TikTokAnalyzeRequest,
+    DetectiveScrapeRequest,
+    ApiEchoRequest,
+    SeoAutopsyRequest,
+    CommonCrawlRequest,
+    OsintInvestigateRequest,
+    GdprScanRequest,
     DashboardStats,
     LLMCommandJSON,
     ScrapeRequest,
@@ -89,7 +103,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=APP_NAME,
     description="ArgosScout — Autonomous Knowledge Agent + Active Probe",
-    version="5.0.0",
+    version="6.0.0",
     lifespan=lifespan,
 )
 
@@ -107,7 +121,7 @@ async def health():
     return {
         "status": "ok",
         "app": APP_NAME,
-        "version": "5.0.0",
+        "version": "6.0.0",
         "scraper_api_configured": bool(SCRAPER_API_KEY),
         "llm": get_llm_status(),
         "scraperio": get_scraper_capabilities(),
@@ -119,6 +133,7 @@ async def health():
         "stockargos": {
             "webhook_configured": bool(STOCKARGOS_WEBHOOK_URL),
         },
+        "privacy_layers": get_policy_status(DEFAULT_PRIVACY_LAYER, COMPLIANCE_COUNTRY),
     }
 
 
@@ -274,6 +289,8 @@ async def api_active_probe(body: ProbeRequest, _key: dict = Depends(require_api_
             swarm_workers=body.swarm_workers,
             provider=body.llm_provider,
             emit_stockargos=body.emit_stockargos,
+            privacy_layer=body.privacy_layer,
+            country=body.country,
         )
         log_scrape(str(body.url), "probe", items_count=len(body.modes))
         return result
@@ -351,6 +368,94 @@ async def api_stockargos_signals(limit: int = 20, _key: dict = Depends(require_a
     return {"signals": list_signals(limit)}
 
 
+# --- Privacy Layers & Smart Detective (v6) ---
+
+
+@app.get("/api/v1/compliance/layers")
+async def api_compliance_layers():
+    return get_policy_status()
+
+
+@app.get("/api/v1/compliance/layer/{layer}")
+async def api_compliance_layer_detail(layer: str):
+    from app.compliance.layers import get_layer_profile, PrivacyLayer
+    try:
+        return get_layer_profile(PrivacyLayer(layer))
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Unknown layer: {layer}")
+
+
+@app.post("/api/v1/compliance/gdpr-scan")
+async def api_gdpr_scan(body: GdprScanRequest, _key: dict = Depends(require_api_key)):
+    layer = resolve_layer(body.privacy_layer, body.country or COMPLIANCE_COUNTRY)
+    findings = scan_for_pii(body.text)
+    result = apply_gdpr_gate(body.text, layer)
+    return {
+        "layer": layer.value,
+        "findings": findings,
+        "scan_count": len(findings),
+        **{k: result[k] for k in ("summary", "masked_count", "dropped_count", "kept_count", "gdpr_applied")},
+        "sanitized_preview": str(result["data"])[:2000],
+    }
+
+
+@app.post("/api/v1/intelligence/detective")
+async def api_detective_scrape(body: DetectiveScrapeRequest, _key: dict = Depends(require_api_key)):
+    try:
+        result = await detective_scrape(
+            str(body.url), goal=body.goal,
+            privacy_layer=body.privacy_layer or DEFAULT_PRIVACY_LAYER,
+            country=body.country or COMPLIANCE_COUNTRY,
+            passive_only=body.passive_only,
+            provider=body.llm_provider,
+        )
+        log_scrape(str(body.url), "detective", items_count=1, success=result.get("success", False))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Detective scrape failed: {e}")
+
+
+@app.post("/api/v1/scrape/seo-autopsy")
+async def api_seo_autopsy(body: SeoAutopsyRequest, _key: dict = Depends(require_api_key)):
+    result = await asyncio.to_thread(seo_autopsy, str(body.url), body.fetch_sitemap)
+    log_scrape(str(body.url), "seo_autopsy", items_count=len(result.get("sources", [])), success=result.get("success", False))
+    return result
+
+
+@app.post("/api/v1/scrape/api-echo")
+async def api_api_echo(body: ApiEchoRequest, _key: dict = Depends(require_api_key)):
+    result = await asyncio.to_thread(api_echo, str(body.url), body.llm_provider)
+    return result
+
+
+@app.post("/api/v1/passive/common-crawl")
+async def api_common_crawl(body: CommonCrawlRequest, _key: dict = Depends(require_api_key)):
+    if body.keyword:
+        result = await asyncio.to_thread(common_crawl_search_text, str(body.url), body.keyword, body.limit)
+    else:
+        result = await asyncio.to_thread(common_crawl_lookup, str(body.url), body.limit)
+    return result
+
+
+@app.post("/api/v1/osint/investigate")
+async def api_osint_investigate(body: OsintInvestigateRequest, _key: dict = Depends(require_api_key)):
+    try:
+        result = await asyncio.to_thread(
+            investigate,
+            name=body.name,
+            url=body.url,
+            tiktok_url=body.tiktok_url,
+            country=body.country or COMPLIANCE_COUNTRY or "DE",
+            company_name=body.company_name,
+            privacy_layer=body.privacy_layer or DEFAULT_PRIVACY_LAYER,
+            provider=body.llm_provider,
+        )
+        log_scrape(body.name or body.url or body.tiktok_url, "osint", items_count=len(result.get("sources_checked", [])))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"OSINT investigation failed: {e}")
+
+
 # --- ArgosScout Agent ---
 
 
@@ -360,6 +465,8 @@ async def api_agent_research(body: AgentRequest, _key: dict = Depends(require_ap
     result = await run_agent(
         body.goal, provider=body.llm_provider, model=body.llm_model,
         use_wayback=body.use_wayback, deep_scrape=body.deep_scrape,
+        privacy_layer=body.privacy_layer, country=body.country,
+        passive_only=body.passive_only,
     )
     log_scrape(body.goal[:100], "agent", items_count=result.get("sources_scraped", 0))
     if result.get("status") == "clarification_needed":

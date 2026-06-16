@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cruel Mini App — Scrape + LLM Admin</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2f3d;
+      --text: #e8eaed;
+      --muted: #9aa0b0;
+      --accent: #6c8cff;
+      --accent-hover: #8aa4ff;
+      --success: #3dd68c;
+      --danger: #ff6b6b;
+      --radius: 12px;
+      --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: "JetBrains Mono", "Fira Code", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    header {
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    header h1 { font-size: 1.4rem; font-weight: 600; }
+    header h1 span { color: var(--accent); }
+    .badge {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .panel-body { padding: 1.25rem; }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+    input, textarea, select {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.9rem;
+      margin-bottom: 0.85rem;
+    }
+    input:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    textarea { min-height: 90px; resize: vertical; }
+    .row { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .row > * { flex: 1; min-width: 140px; }
+    button {
+      padding: 0.6rem 1.1rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn-secondary:hover { background: #3a4050; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.78rem; }
+    .chat-messages {
+      height: 320px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      padding-right: 0.25rem;
+    }
+    .msg {
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      max-width: 92%;
+      font-size: 0.88rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg-user {
+      align-self: flex-end;
+      background: var(--accent);
+      color: #fff;
+      border-bottom-right-radius: 2px;
+    }
+    .msg-bot {
+      align-self: flex-start;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 2px;
+    }
+    .msg-system {
+      align-self: center;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.78rem;
+      padding: 0.25rem;
+    }
+    .json-output {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      overflow: auto;
+      max-height: 280px;
+      white-space: pre-wrap;
+      color: #a8d4a8;
+    }
+    .key-list { list-style: none; }
+    .key-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+      gap: 0.5rem;
+    }
+    .key-list li:last-child { border-bottom: none; }
+    .key-meta { color: var(--muted); font-size: 0.78rem; }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.85rem;
+      font-size: 0.85rem;
+    }
+    .toggle-row input[type="checkbox"] { width: auto; margin: 0; }
+    .full-width { grid-column: 1 / -1; }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 0.4rem;
+    }
+    .status-ok { background: var(--success); }
+    .status-warn { background: #f0c040; }
+    .new-key-banner {
+      background: #1a2e1a;
+      border: 1px solid #2d5a2d;
+      border-radius: 8px;
+      padding: 0.85rem;
+      margin-bottom: 1rem;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      word-break: break-all;
+      color: var(--success);
+    }
+    .examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 0.75rem;
+    }
+    .example-chip {
+      font-size: 0.75rem;
+      padding: 0.3rem 0.6rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .example-chip:hover { border-color: var(--accent); color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1><span>Cruel</span> Mini App</h1>
+      <p style="color:var(--muted);font-size:0.85rem;margin-top:0.25rem">
+        API ключове · Scrape · LLM чатбот администратор
+      </p>
+    </div>
+    <div id="health-badge" class="badge">Checking...</div>
+  </header>
+
+  <main>
+    <!-- Chat Panel -->
+    <section class="panel">
+      <div class="panel-header">
+        LLM Чатбот
+        <div class="toggle-row" style="margin:0">
+          <input type="checkbox" id="json-mode" />
+          <label for="json-mode" style="margin:0;cursor:pointer">JSON режим</label>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="examples">
+          <span class="example-chip" data-msg="Кои сайтове да използвам за цени на имоти в България?">Имоти BG</span>
+          <span class="example-chip" data-msg="Scrape https://example.com и извлечи заглавие">Scrape URL</span>
+          <span class="example-chip" data-msg="Препоръчай сайтове за freelance услуги">Freelance</span>
+          <span class="example-chip" data-msg="Какво можеш да правиш?">Помощ</span>
+        </div>
+        <div id="chat-messages" class="chat-messages">
+          <div class="msg msg-system">Задайте команда на български или английски. LLM ще върне структуриран JSON.</div>
+        </div>
+        <textarea id="chat-input" placeholder="Напр: Извлечи данни от https://www.fiverr.com/... или Кои сайтове за новини?"></textarea>
+        <div class="row">
+          <div class="toggle-row">
+            <input type="checkbox" id="execute-scrape" />
+            <label for="execute-scrape" style="margin:0;cursor:pointer">Изпълни scrape</label>
+          </div>
+          <button class="btn-primary" id="send-chat" style="flex:0">Изпрати</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- JSON Output -->
+    <section class="panel">
+      <div class="panel-header">LLM JSON Output</div>
+      <div class="panel-body">
+        <pre id="json-output" class="json-output">// Structured command JSON will appear here</pre>
+        <p style="color:var(--muted);font-size:0.78rem;margin-top:0.75rem">
+          Използвайте <code>/api/v1/parse</code> или <code>/api/v1/chat?json_only=true</code> за директна LLM комуникация.
+        </p>
+      </div>
+    </section>
+
+    <!-- API Keys Admin -->
+    <section class="panel">
+      <div class="panel-header">API Ключове</div>
+      <div class="panel-body">
+        <label>Admin Secret (X-Admin-Secret)</label>
+        <input type="password" id="admin-secret" placeholder="cruel-admin-change-me" />
+        <label>API Key (X-API-Key) — за scrape заявки</label>
+        <input type="password" id="api-key" placeholder="cruel_..." />
+        <div id="new-key-banner" class="new-key-banner" style="display:none"></div>
+        <div class="row">
+          <input type="text" id="key-name" placeholder="Име на ключа" value="my-key" />
+          <button class="btn-primary" id="create-key">Генерирай ключ</button>
+        </div>
+        <ul id="key-list" class="key-list"></ul>
+      </div>
+    </section>
+
+    <!-- Direct Scrape -->
+    <section class="panel">
+      <div class="panel-header">Директен Scrape</div>
+      <div class="panel-body">
+        <label>URL</label>
+        <input type="url" id="scrape-url" placeholder="https://example.com" />
+        <label>Extract полета (запетая)</label>
+        <input type="text" id="scrape-extract" value="title,text,links" />
+        <button class="btn-primary" id="run-scrape">Scrape</button>
+        <pre id="scrape-output" class="json-output" style="margin-top:1rem;max-height:240px">// Scrape result</pre>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function getApiKey() {
+      return localStorage.getItem("cruel_api_key") || $("api-key").value.trim();
+    }
+    function getAdminSecret() {
+      return localStorage.getItem("cruel_admin_secret") || $("admin-secret").value.trim();
+    }
+    $("api-key").addEventListener("change", () => localStorage.setItem("cruel_api_key", $("api-key").value));
+    $("admin-secret").addEventListener("change", () => localStorage.setItem("cruel_admin_secret", $("admin-secret").value));
+
+    async function checkHealth() {
+      try {
+        const r = await fetch("/health");
+        const d = await r.json();
+        const dot = d.scraper_api_configured ? "status-ok" : "status-warn";
+        $("health-badge").innerHTML = `<span class="status-dot ${dot}"></span>${d.status} · ScraperAPI ${d.scraper_api_configured ? "ON" : "OFF"}`;
+      } catch {
+        $("health-badge").textContent = "offline";
+      }
+    }
+
+    function addMessage(text, role) {
+      const div = document.createElement("div");
+      div.className = `msg msg-${role}`;
+      div.textContent = text;
+      $("chat-messages").appendChild(div);
+      $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+    }
+
+    async function sendChat() {
+      const message = $("chat-input").value.trim();
+      if (!message) return;
+      addMessage(message, "user");
+      $("chat-input").value = "";
+
+      const jsonOnly = $("json-mode").checked;
+      const executeScrape = $("execute-scrape").checked;
+      const apiKey = getApiKey();
+
+      const endpoint = apiKey ? "/api/v1/chat" : "/api/v1/chat/public";
+      const headers = { "Content-Type": "application/json" };
+      if (apiKey) headers["X-API-Key"] = apiKey;
+
+      try {
+        const r = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ message, execute_scrape: executeScrape, json_only: jsonOnly }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || "Request failed");
+
+        if (jsonOnly) {
+          $("json-output").textContent = JSON.stringify(d, null, 2);
+          addMessage("JSON отговор (виж панела)", "bot");
+        } else {
+          addMessage(d.reply || d.command?.explanation || "OK", "bot");
+          $("json-output").textContent = JSON.stringify(d.command, null, 2);
+        }
+      } catch (e) {
+        addMessage("Грешка: " + e.message, "bot");
+      }
+    }
+
+    async function createKey() {
+      const secret = getAdminSecret();
+      if (!secret) return alert("Въведете Admin Secret");
+      try {
+        const r = await fetch("/admin/keys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Secret": secret },
+          body: JSON.stringify({ name: $("key-name").value || "default" }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || "Failed");
+        $("new-key-banner").style.display = "block";
+        $("new-key-banner").textContent = "Нов ключ (запазете го!): " + d.key;
+        $("api-key").value = d.key;
+        localStorage.setItem("cruel_api_key", d.key);
+        loadKeys();
+      } catch (e) {
+        alert("Грешка: " + e.message);
+      }
+    }
+
+    async function loadKeys() {
+      const secret = getAdminSecret();
+      if (!secret) return;
+      try {
+        const r = await fetch("/admin/keys", { headers: { "X-Admin-Secret": secret } });
+        const keys = await r.json();
+        if (!r.ok) return;
+        $("key-list").innerHTML = keys.map((k) => `
+          <li>
+            <div>
+              <strong>${k.name}</strong> <span class="key-meta">${k.key_prefix}</span>
+              <div class="key-meta">uses: ${k.usage_count} · ${k.is_active ? "active" : "revoked"}</div>
+            </div>
+            ${k.is_active ? `<button class="btn-danger btn-sm" onclick="revokeKey('${k.id}')">Revoke</button>` : ""}
+          </li>
+        `).join("");
+      } catch {}
+    }
+
+    async function revokeKey(id) {
+      const secret = getAdminSecret();
+      await fetch(`/admin/keys/${id}`, { method: "DELETE", headers: { "X-Admin-Secret": secret } });
+      loadKeys();
+    }
+
+    async function runScrape() {
+      const apiKey = getApiKey();
+      if (!apiKey) return alert("Въведете API ключ");
+      const url = $("scrape-url").value.trim();
+      const extract = $("scrape-extract").value.split(",").map((s) => s.trim()).filter(Boolean);
+      try {
+        const r = await fetch("/api/v1/scrape", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+          body: JSON.stringify({ url, extract }),
+        });
+        const d = await r.json();
+        $("scrape-output").textContent = JSON.stringify(d, null, 2);
+      } catch (e) {
+        $("scrape-output").textContent = "Error: " + e.message;
+      }
+    }
+
+    $("send-chat").addEventListener("click", sendChat);
+    $("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } });
+    $("create-key").addEventListener("click", createKey);
+    $("run-scrape").addEventListener("click", runScrape);
+    document.querySelectorAll(".example-chip").forEach((el) => {
+      el.addEventListener("click", () => { $("chat-input").value = el.dataset.msg; });
+    });
+
+    const savedKey = localStorage.getItem("cruel_api_key");
+    const savedSecret = localStorage.getItem("cruel_admin_secret");
+    if (savedKey) $("api-key").value = savedKey;
+    if (savedSecret) $("admin-secret").value = savedSecret;
+
+    checkHealth();
+    if (savedSecret) loadKeys();
+  </script>
+</body>
+</html>

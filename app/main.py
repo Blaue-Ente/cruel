@@ -16,6 +16,8 @@ from app.predictive import (
     run_predictive_cycle,
     start_predictive_background,
 )
+from app.probe.orchestrator import get_probe_capabilities, run_active_probe
+from app.probe.pheromones import init_pheromone_table, list_pheromones
 from app.vision import get_vision_capabilities, vision_scrape
 from app.models import (
     AgentRequest,
@@ -27,6 +29,7 @@ from app.models import (
     ChatResponse,
     ContextRequest,
     PredictiveSuggestionsResponse,
+    ProbeRequest,
     DashboardStats,
     LLMCommandJSON,
     ScrapeRequest,
@@ -62,14 +65,15 @@ import requests
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    init_pheromone_table()
     start_predictive_background()
     yield
 
 
 app = FastAPI(
     title=APP_NAME,
-    description="ArgosScout — Autonomous Knowledge Agent (Cruel + Scraper.io)",
-    version="3.1.0",
+    description="ArgosScout — Autonomous Knowledge Agent + Active Probe",
+    version="4.0.0",
     lifespan=lifespan,
 )
 
@@ -92,6 +96,7 @@ async def health():
         "scraperio": get_scraper_capabilities(),
         "vision": get_vision_capabilities(),
         "predictive": get_predictive_stats(),
+        "probe": get_probe_capabilities(),
     }
 
 
@@ -229,6 +234,38 @@ async def api_predictive_run(_key: dict = Depends(require_api_key)):
 @app.get("/api/v1/predictive/stats")
 async def api_predictive_stats(_key: dict = Depends(require_api_key)):
     return get_predictive_stats()
+
+
+# --- Active Probe ---
+
+
+@app.post("/api/v1/probe/run")
+async def api_active_probe(body: ProbeRequest, _key: dict = Depends(require_api_key)):
+    try:
+        result = await run_active_probe(
+            str(body.url),
+            modes=body.modes,
+            goal=body.goal,
+            urls=body.urls,
+            dry_run=body.dry_run,
+            temporal_offset_days=body.temporal_offset_days,
+            swarm_workers=body.swarm_workers,
+            provider=body.llm_provider,
+        )
+        log_scrape(str(body.url), "probe", items_count=len(body.modes))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Active probe failed: {e}")
+
+
+@app.get("/api/v1/probe/capabilities")
+async def probe_capabilities():
+    return get_probe_capabilities()
+
+
+@app.get("/api/v1/probe/pheromones")
+async def probe_pheromones(_key: dict = Depends(require_api_key)):
+    return {"pheromones": list_pheromones()}
 
 
 # --- ArgosScout Agent ---

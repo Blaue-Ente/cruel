@@ -68,6 +68,32 @@ POST /api/v1/predictive/run       # ръчен цикъл
 ```
 Автоматичен бекграунд цикъл на всеки 300s (конфигурируем).
 
+## Active Probe (v4.0) — Активен Изследовател
+
+| Режим | Описание |
+|-------|----------|
+| `provocative_stock` | Добавя 9999 в количката → прихваща грешка с наличности |
+| `provocative_form` | Extreme form values → validation errors |
+| `conversational` | LLM генерира запитване → попълва форми/чат (dry_run по подразбиране) |
+| `api_fuzz` | Shadow map на API endpoints + LLM path guessing |
+| `temporal` | Date() spoofing за time-gated съдържание |
+| `vision` | Screenshot + Vision LLM |
+| `swarm` | Паралелни micro-scrapers с pheromone памет |
+
+```bash
+POST /api/v1/probe/run
+{
+  "url": "https://shop.example.com/product",
+  "modes": ["provocative_stock", "api_fuzz", "swarm"],
+  "goal": "stock levels and pricing",
+  "dry_run": true
+}
+
+GET /api/v1/probe/pheromones   # sweet/poison routing memory
+```
+
+**Pheromones:** Sweet = добър източник, Poison = CAPTCHA/block → swarm избягва.
+
 ## API Endpoints
 
 | Endpoint | Описание |

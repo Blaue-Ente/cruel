@@ -20,6 +20,7 @@
       <button class="nav-item" data-page="universal"><span class="nav-icon">🌐</span><span>Universal Scrape</span></button>
       <button class="nav-item" data-page="vision"><span class="nav-icon">👁</span><span>Vision Scrape</span></button>
       <button class="nav-item" data-page="predictive"><span class="nav-icon">🔮</span><span>Predictive</span></button>
+      <button class="nav-item" data-page="probe"><span class="nav-icon">🎯</span><span>Active Probe</span></button>
       <button class="nav-item" data-page="keys"><span class="nav-icon">🔑</span><span>API Ключове</span></button>
       <button class="nav-item" data-page="settings"><span class="nav-icon">⚙️</span><span>Настройки</span></button>
     </nav>
@@ -32,7 +33,7 @@
     <header class="topbar">
       <h2 id="page-title">Dashboard</h2>
       <div class="topbar-actions">
-        <span class="badge badge-green">v3.1</span>
+        <span class="badge badge-green">v4.0</span>
       </div>
     </header>
 
@@ -266,6 +267,50 @@
                 <div class="msg msg-sys">Използвайте Agent/Chat за да изградите контекст, или запишете интерес ръчно.</div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      </section>
+
+      <!-- ACTIVE PROBE -->
+      <section id="page-probe" class="page">
+        <div class="card">
+          <div class="card-header">🎯 Active Probe — ArgosScout</div>
+          <div class="card-body">
+            <div class="alert alert-info">
+              Активен изследовател: провокативно скрейпване, API fuzzing, conversational forms,
+              temporal spoofing, swarm pheromones. <strong>Само за авторизирани цели.</strong>
+            </div>
+            <div class="row">
+              <div style="flex:2">
+                <label>URL</label>
+                <input type="url" id="probe-url" placeholder="https://shop.example.com/product/123" />
+              </div>
+              <div style="flex:2">
+                <label>Цел / Goal</label>
+                <input type="text" id="probe-goal" placeholder="stock levels, pricing, API endpoints..." />
+              </div>
+            </div>
+            <label>Режими (modes)</label>
+            <div class="chips" id="probe-modes">
+              <span class="chip probe-mode active" data-mode="api_fuzz">API Fuzz</span>
+              <span class="chip probe-mode active" data-mode="vision">Vision</span>
+              <span class="chip probe-mode" data-mode="provocative_stock">Provocative Stock</span>
+              <span class="chip probe-mode" data-mode="provocative_form">Provocative Form</span>
+              <span class="chip probe-mode" data-mode="conversational">Conversational</span>
+              <span class="chip probe-mode" data-mode="temporal">Temporal Spoof</span>
+              <span class="chip probe-mode" data-mode="swarm">Swarm</span>
+            </div>
+            <div class="toggle-row">
+              <input type="checkbox" id="probe-dry-run" checked />
+              <label for="probe-dry-run" style="margin:0">Dry run (conversational — не изпраща форми)</label>
+            </div>
+            <div class="row">
+              <button class="btn btn-primary" id="btn-probe-run">Стартирай Probe</button>
+              <button class="btn btn-secondary" id="btn-probe-pheromones">Pheromones</button>
+            </div>
+            <pre id="probe-result" class="json-view" style="margin-top:1rem;max-height:420px">// Probe results</pre>
           </div>
         </div>
       </section>

@@ -132,6 +132,20 @@ class PredictiveSuggestionsResponse(BaseModel):
     message: str = ""
 
 
+class ProbeRequest(BaseModel):
+    url: HttpUrl
+    modes: list[str] = Field(
+        default_factory=lambda: ["api_fuzz", "vision"],
+        description="provocative_stock, provocative_form, conversational, api_fuzz, temporal, vision, swarm",
+    )
+    goal: str = ""
+    urls: Optional[list[str]] = None
+    dry_run: bool = True
+    temporal_offset_days: int = 1
+    swarm_workers: int = Field(default=5, ge=1, le=10)
+    llm_provider: Optional[str] = None
+
+
 class ChatResponse(BaseModel):
     reply: str
     command: LLMCommandJSON

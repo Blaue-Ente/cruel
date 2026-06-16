@@ -33,6 +33,7 @@ function showPage(id) {
   if (id === "dashboard") loadDashboard();
   if (id === "keys") loadKeys();
   if (id === "predictive") loadPredictiveStats();
+  if (id === "probe") loadProbeCapabilities();
 }
 
 async function loadHealth() {
@@ -354,6 +355,49 @@ async function loadPredictiveSuggestions() {
   });
 }
 
+function getSelectedProbeModes() {
+  return [...document.querySelectorAll(".probe-mode.active")].map((el) => el.dataset.mode);
+}
+
+async function loadProbeCapabilities() {
+  try {
+    const r = await fetch("/api/v1/probe/capabilities");
+    const d = await r.json();
+    $("probe-result").textContent = JSON.stringify(d, null, 2);
+  } catch {}
+}
+
+async function runProbe() {
+  if (!state.apiKey) return alert("Въведете API ключ");
+  const url = $("probe-url").value.trim();
+  if (!url) return;
+  const modes = getSelectedProbeModes();
+  if (!modes.length) return alert("Изберете поне един режим");
+  $("probe-result").textContent = "Active Probe running...";
+  try {
+    const r = await fetch("/api/v1/probe/run", {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({
+        url, modes,
+        goal: $("probe-goal").value.trim(),
+        dry_run: $("probe-dry-run").checked,
+        llm_provider: state.llmProvider !== "auto" ? state.llmProvider : null,
+      }),
+    });
+    const d = await r.json();
+    $("probe-result").textContent = JSON.stringify(d, null, 2);
+  } catch (e) {
+    $("probe-result").textContent = "Error: " + e.message;
+  }
+}
+
+async function loadPheromones() {
+  if (!state.apiKey) return alert("Въведете API ключ");
+  const r = await fetch("/api/v1/probe/pheromones", { headers: authHeaders() });
+  const d = await r.json();
+  $("probe-result").textContent = JSON.stringify(d, null, 2);
+}
+
 function init() {
   $("set-api-key").value = state.apiKey;
   $("set-admin-secret").value = state.adminSecret;
@@ -377,6 +421,11 @@ function init() {
   $("btn-predictive-save").addEventListener("click", savePredictiveContext);
   $("btn-predictive-run").addEventListener("click", runPredictiveCycle);
   $("btn-predictive-load").addEventListener("click", loadPredictiveSuggestions);
+  $("btn-probe-run").addEventListener("click", runProbe);
+  $("btn-probe-pheromones").addEventListener("click", loadPheromones);
+  document.querySelectorAll(".probe-mode").forEach((el) => {
+    el.addEventListener("click", () => el.classList.toggle("active"));
+  });
   $("set-llm-provider").addEventListener("change", () => { populateModels(); });
 
   document.querySelectorAll(".chip[data-agent]").forEach((el) => {

@@ -58,6 +58,7 @@ class DashboardStats(BaseModel):
 class IntentType(str, Enum):
     SCRAPE = "scrape"
     UNIVERSAL_SCRAPE = "universal_scrape"
+    VISION_SCRAPE = "vision_scrape"
     AGENT_RESEARCH = "agent_research"
     SEARCH_SITES = "search_sites"
     ADMIN = "admin"
@@ -111,6 +112,38 @@ class WaybackRequest(BaseModel):
 class SelfHealRequest(BaseModel):
     url: HttpUrl
     selectors: dict[str, str]
+
+
+class VisionScrapeRequest(BaseModel):
+    url: HttpUrl
+    goal: str = ""
+    llm_provider: Optional[str] = None
+
+
+class ContextRequest(BaseModel):
+    message: str
+    llm_provider: Optional[str] = None
+
+
+class PredictiveSuggestionsResponse(BaseModel):
+    topics: list[str] = Field(default_factory=list)
+    suggestions: list[dict[str, Any]] = Field(default_factory=list)
+    predictive_enabled: bool = True
+    message: str = ""
+
+
+class ProbeRequest(BaseModel):
+    url: HttpUrl
+    modes: list[str] = Field(
+        default_factory=lambda: ["api_fuzz", "vision"],
+        description="provocative_stock, provocative_form, conversational, api_fuzz, temporal, vision, swarm",
+    )
+    goal: str = ""
+    urls: Optional[list[str]] = None
+    dry_run: bool = True
+    temporal_offset_days: int = 1
+    swarm_workers: int = Field(default=5, ge=1, le=10)
+    llm_provider: Optional[str] = None
 
 
 class ChatResponse(BaseModel):

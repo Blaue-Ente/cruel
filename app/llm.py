@@ -11,7 +11,7 @@ Powered by Cruel + Scraper.io. Understand Bulgarian and English. Return ONLY val
 
 Schema:
 {
-  "intent": "scrape" | "universal_scrape" | "agent_research" | "search_sites" | "admin" | "help" | "chat",
+  "intent": "scrape" | "universal_scrape" | "vision_scrape" | "agent_research" | "search_sites" | "admin" | "help" | "chat",
   "urls": ["https://..."],
   "selectors": {"field": "css"},
   "extract": ["title", "text", "links", "meta"],
@@ -30,6 +30,7 @@ Rules:
 - Research/compare/find tasks WITHOUT explicit URL → intent=agent_research, scrape_mode=agent
 - Single page quick extract → intent=scrape, scrape_mode=quick
 - Blog/multi-article → intent=universal_scrape, scrape_mode=universal
+- Visual/page layout extraction, screenshot reading → intent=vision_scrape, scrape_mode=vision
 - Vague requests → needs_clarification=true with clarification_question
 - Bulgarian explanations when user writes in Bulgarian
 
@@ -74,6 +75,17 @@ def _rule_based_parse(message: str) -> LLMCommandJSON:
             confidence=0.75,
             scrape_mode="agent",
             use_wayback=True,
+        )
+
+    vision_keywords = ["vision", "screenshot", "визуал", "екран", "като човек", "прочети страницата"]
+    if any(w in message_lower for w in vision_keywords) or (urls and any(w in message_lower for w in ["vision", "визуал"])):
+        return LLMCommandJSON(
+            intent=IntentType.VISION_SCRAPE,
+            urls=urls,
+            query=message,
+            explanation="Ще анализирам страницата визуално с Vision LLM." if any(c in message for c in "абвгдежзийклмнопрстуфхцчшщъьюя") else "Will analyze page visually with Vision LLM.",
+            confidence=0.8,
+            scrape_mode="vision",
         )
 
     scrape_mode = "quick"
@@ -135,6 +147,8 @@ def build_chat_reply(command: LLMCommandJSON, extra: Optional[str] = None) -> st
             parts.append(f"- {site['name']} ({site['url']})")
     if command.urls:
         parts.append(f"\n**URL:** {', '.join(command.urls)}")
+    if command.scrape_mode == "vision":
+        parts.append("\n**Режим:** Vision LLM")
     if command.scrape_mode == "agent":
         parts.append("\n**Режим:** ArgosScout Agent")
     if command.scrape_mode == "universal":

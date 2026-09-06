@@ -94,6 +94,8 @@ def test_playbook_covers_arsenal():
         "lawful_fallback",
         "byok",
         "risk_gate",
+        "research_discovery",
+        "research_verification",
         "flaresolverr",
         "github_commit_emails",
     ):

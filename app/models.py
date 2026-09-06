@@ -259,6 +259,29 @@ class GithubEmailsRequest(BaseModel):
     limit: int = Field(default=20, ge=1, le=30)
 
 
+class ResearchDiscoverRequest(BaseModel):
+    query: str = Field(..., min_length=2, max_length=500)
+    mode: str = "quick"
+    workflow: str = "discover_only"
+    include_people: bool = False
+    privacy_layer: Optional[str] = None
+    country: Optional[str] = None
+    custom_limits: dict[str, int] = Field(default_factory=dict)
+    urls: list[str] = Field(default_factory=list)
+
+
+class ResearchVerifyRequest(BaseModel):
+    scope: str = "selected"
+    level: str = "analyze"
+    ids: list[str] = Field(default_factory=list)
+    entity_id: str = ""
+
+
+class ResearchMergeRequest(BaseModel):
+    ids: list[str] = Field(default_factory=list)
+    reason: str = "operator merge"
+
+
 class GdprScanRequest(BaseModel):
     text: str
     privacy_layer: Optional[str] = None

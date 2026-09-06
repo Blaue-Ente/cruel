@@ -1,4 +1,4 @@
-# ArgosScout v8.1 — Autonomous OSINT & Deep Intelligence OS
+# ArgosScout v8.2 — Autonomous OSINT & Deep Intelligence OS
 
 Self-hosted research workstation: ask a question, get a **cited, compliance-aware dossier**. Copilot executes tools (Apex, search, extract, Wayback, registries, GDPR) instead of chatting in circles.
 
@@ -14,6 +14,18 @@ Self-hosted research workstation: ask a question, get a **cited, compliance-awar
 - **Dashboard** — status rings and provider pills instead of raw JSON dumps.
 - **Admin secret hygiene** — shipped default is rejected. Empty `ADMIN_SECRET` generates `data/.admin_secret` (mode 0600). Health reports `admin_secret_source`, never the secret.
 - **Operator risk gate** — Settings → read the EN/BG notice → confirm authorized use → type `I ACCEPT THE RISK` or `ПРИЕМАМ РИСКА` → enable each switch. Revoke turns everything off. ArgosScout does **not** ship a Cloudflare/Turnstile solver.
+- **Dual-layer research** — Layer A Discovery fills an unverified Research Inbox. Layer B Verification is optional (`Verify selected` / entity / claim / entire) and never a single “truth score”.
+
+## Dual-layer research
+
+Discovery and Verification share Access Policy, Privacy Layers, SSRF, provenance, and budget envelopes. Verification is optional; security is not.
+
+| Workflow | What happens |
+|----------|----------------|
+| Discover only | Public traces, registries, archives → Inbox. `verification_status=not_requested`. |
+| Discover → Verify | Same, then an explicit second pass with its own budget. |
+
+Search snippets are traces, not read sources. Republished copies count as one origin. People are not merged by name. Export keeps unverified status. `RESEARCH_LOCAL_ONLY=true` blocks cloud LLM comments during verification.
 
 ## Operator risk gate
 
@@ -286,6 +298,7 @@ python3 run_app.py
 - [x] Feature Inspector playbook
 - [x] Generated admin secret (no shipped default)
 - [x] Operator risk gate (opt-in FlareSolverr / TLS impersonate / fingerprints / LinkedIn / GitHub emails)
+- [x] Dual-layer Discovery Inbox + optional Verification Center
 - [ ] Optional allow-list of scrape hosts for locked-down deployments
 
 **Not shipped as always-on (by design):** Cloudflare challenge bypass, canvas-noise anti-detect, LinkedIn login bypass, GitHub-wide email harvesting. Those exist only behind the operator risk gate, off by default.

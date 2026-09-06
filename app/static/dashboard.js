@@ -33,6 +33,7 @@ const PAGES = [
   { id: "dashboard", label: "Dashboard" },
   { id: "agent", label: "Argos Agent" },
   { id: "apex", label: "Apex Master" },
+  { id: "research", label: "Research" },
   { id: "detective", label: "Smart Detective" },
   { id: "chat", label: "LLM Chat" },
   { id: "quick", label: "Quick Scrape" },
@@ -59,6 +60,7 @@ const state = {
   locale: localStorage.getItem("argos_locale") || "auto",
   reducedMotion: localStorage.getItem("argos_reduced_motion") === "true",
   copilotDock: localStorage.getItem("argos_copilot_dock") !== "false",
+  researchId: localStorage.getItem("argos_research_id") || "",
 };
 
 function resolvedLocale() {
@@ -81,6 +83,7 @@ function saveState() {
   localStorage.setItem("argos_locale", state.locale);
   localStorage.setItem("argos_reduced_motion", String(state.reducedMotion));
   localStorage.setItem("argos_copilot_dock", String(state.copilotDock));
+  localStorage.setItem("argos_research_id", state.researchId || "");
 }
 
 function applyChrome() {
@@ -122,6 +125,10 @@ function showPage(id) {
   if (id === "compliance") loadComplianceLayers();
   if (id === "detective" && $("det-country")) $("det-country").value = state.country;
   if (id === "apex") loadLastApex();
+  if (id === "research") {
+    loadResearchForecast();
+    if (state.researchId) loadResearchInbox(state.researchId);
+  }
   if (id === "settings") loadRiskStatus();
   loadCopilotContext();
 }
@@ -938,6 +945,229 @@ async function loadLastApex() {
   } catch {}
 }
 
+function setArgosState(kind, caption, sub) {
+  const stage = $("argos-stage");
+  if (stage) stage.dataset.state = kind || "idle";
+  if ($("argos-caption")) $("argos-caption").textContent = caption || "";
+  if ($("argos-sub")) $("argos-sub").textContent = sub || "";
+}
+
+function researchTab(id) {
+  document.querySelectorAll(".research-tab").forEach((el) => el.classList.toggle("active", el.dataset.rtab === id));
+  document.querySelectorAll(".research-panel").forEach((el) => el.classList.toggle("active", el.id === `rtab-${id}`));
+}
+
+async function loadResearchForecast() {
+  const box = $("research-forecast");
+  if (!box || !state.apiKey) return;
+  const mode = $("research-mode")?.value || "quick";
+  const verify = $("research-workflow")?.value === "discover_then_verify";
+  try {
+    const r = await fetch(`/api/v1/research/estimate?mode=${mode}&verify=${verify}`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+    const disc = d.discovery || {};
+    const ver = d.verification;
+    box.textContent = `Forecast (not a bill): ~${disc.requests || "?"} requests, ${disc.seconds || "?"}s discovery`
+      + (ver ? `; verify ~${ver.requests} extra requests / ${ver.seconds}s` : "")
+      + ". " + (d.note || "");
+  } catch {}
+}
+
+function renderInbox(pack) {
+  const box = $("research-inbox");
+  if (!box) return;
+  const docs = pack.documents || [];
+  if (!docs.length) {
+    box.innerHTML = '<div class="empty-state">No materials yet. Run Discovery.</div>';
+    return;
+  }
+  box.innerHTML = docs.map((d) => `
+    <article class="research-item" data-id="${d.id}">
+      <header>
+        <strong>${d.title || d.url || "Untitled trace"}</strong>
+        <span class="badge-unverified">${d.verification_status || "not_requested"}</span>
+      </header>
+      <p class="muted-sm">${d.publisher || ""} · ${d.method || ""} · ${d.is_snippet ? "search snippet (trace)" : d.source_type}</p>
+      <p class="muted-sm">${(d.excerpt || "").slice(0, 220)}</p>
+      <p class="muted-sm">${d.url || ""}</p>
+      <label class="toggle-row"><input type="checkbox" class="research-pick" value="${d.id}" /><span>Select</span></label>
+    </article>`).join("");
+}
+
+function renderVerify(pack) {
+  const box = $("research-verify-out");
+  if (!box) return;
+  const claims = pack.claims || pack.results || [];
+  if (!claims.length) {
+    box.innerHTML = '<div class="empty-state">Nothing verified yet.</div>';
+    return;
+  }
+  const rows = pack.results
+    ? pack.results.map((row) => {
+        const c = row.claim || {};
+        const a = row.assessment || {};
+        return { ...c, explanation: a.explanation, dimensions: a.dimensions };
+      })
+    : claims;
+  box.innerHTML = rows.map((c) => `
+    <article class="research-item">
+      <header>
+        <strong>${(c.text || "").slice(0, 180)}</strong>
+        <span class="badge-status ${c.status || ""}">${c.status || "not_requested"}</span>
+      </header>
+      <p class="muted-sm">${c.explanation || "Not assessed. A missing confirmation is not a false claim."}</p>
+      <button class="btn btn-secondary btn-sm research-evidence-btn" data-claim="${c.id}" type="button">Show evidence</button>
+    </article>`).join("");
+  box.querySelectorAll(".research-evidence-btn").forEach((btn) => {
+    btn.addEventListener("click", () => showClaimEvidence(pack, btn.dataset.claim));
+  });
+}
+
+function showClaimEvidence(pack, claimId) {
+  researchTab("evidence");
+  const box = $("research-evidence");
+  const row = (pack.results || []).find((item) => (item.claim || {}).id === claimId);
+  const evidence = row?.evidence || [];
+  if (!evidence.length) {
+    box.innerHTML = '<div class="empty-state">No evidence links for that claim yet.</div>';
+    return;
+  }
+  box.innerHTML = evidence.map((e) => `
+    <article class="research-item">
+      <header><strong>${e.title || e.document_id}</strong><span class="badge-status">${e.stance}</span></header>
+      <p class="muted-sm">${e.reliability?.note || ""}</p>
+      <p class="muted-sm">${(e.excerpt || "").slice(0, 280)}</p>
+    </article>`).join("");
+}
+
+function renderReport(pack) {
+  const box = $("research-report");
+  if (!box) return;
+  const cov = pack.coverage_map || pack.task?.coverage || {};
+  const gaps = pack.gap_map || [];
+  const ents = pack.entities || [];
+  box.innerHTML = `
+    <article class="research-item"><strong>Coverage</strong>
+      <p class="muted-sm">Ran: ${(cov.ran || []).join(", ") || "—"}</p>
+      <p class="muted-sm">Blocked: ${(cov.blocked || []).join(", ") || "—"}</p>
+      <p class="muted-sm">Out of scope: ${(cov.out_of_scope || []).join(", ") || "—"}</p>
+    </article>
+    <article class="research-item"><strong>Candidates (not merged by name)</strong>
+      ${ents.map((e) => `<p class="muted-sm">${e.kind}: ${e.name} · ${e.link_status}${e.merged_into ? " → " + e.merged_into : ""}</p>`).join("") || "<p class='muted-sm'>None</p>"}
+    </article>
+    <article class="research-item"><strong>Evidence gaps</strong>
+      ${gaps.map((g) => `<p class="muted-sm">${g.status}: ${g.text}<br>${g.next}</p>`).join("") || "<p class='muted-sm'>No gap list yet.</p>"}
+    </article>`;
+}
+
+async function loadResearchInbox(taskId, extra) {
+  if (!state.apiKey || !taskId) return;
+  const q = $("research-filter")?.value || "";
+  const t = $("research-type-filter")?.value || "";
+  const r = await fetch(`/api/v1/research/${taskId}/inbox?q=${encodeURIComponent(q)}&source_type=${encodeURIComponent(t)}`, { headers: authHeaders() });
+  if (!r.ok) return;
+  const pack = await r.json();
+  renderInbox(pack);
+  renderVerify(extra || pack);
+  renderReport(pack);
+  if ($("research-inspector")) $("research-inspector").textContent = JSON.stringify(pack, null, 2);
+  const counts = pack.counts || {};
+  $("research-run-status").textContent = `${pack.task?.status || ""} · ${counts.documents || 0} materials · ${counts.unverified || 0} unverified`;
+  return pack;
+}
+
+async function runResearch() {
+  if (!state.apiKey) return alert(t("need_key"));
+  const query = $("research-query")?.value.trim();
+  if (!query) return;
+  setArgosState("discover", "Argos is scanning public traces", "Search snippets stay traces until you choose to verify.");
+  $("research-run-status").textContent = "Discovery running…";
+  $("research-inbox").innerHTML = '<div class="loading-state">Collecting allowed sources…</div>';
+  try {
+    const r = await fetch("/api/v1/research/discover", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        query,
+        mode: $("research-mode").value,
+        workflow: $("research-workflow").value,
+        include_people: $("research-people").checked,
+        privacy_layer: state.privacyLayer || null,
+        country: state.country || null,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Discovery failed");
+    state.researchId = d.task.id;
+    saveState();
+    const done = d.task.status;
+    setArgosState(done === "error" ? "error" : "done", "Inbox ready — unverified", d.banner);
+    renderInbox(d);
+    renderVerify(d);
+    renderReport(d);
+    if ($("research-inspector")) $("research-inspector").textContent = JSON.stringify(d, null, 2);
+    $("research-run-status").textContent = `${done} · ${d.counts?.documents || 0} materials`;
+    if (d.task.workflow === "discover_then_verify") {
+      setArgosState("verify", "Weighing collected evidence", "No single truth score. Independence groups copies of the same story.");
+      researchTab("verify");
+    }
+  } catch (e) {
+    setArgosState("error", "Discovery stopped", e.message);
+    $("research-inbox").innerHTML = `<div class="error-state">${e.message}</div>`;
+  }
+}
+
+async function verifyResearch() {
+  if (!state.apiKey) return alert(t("need_key"));
+  if (!state.researchId) return alert("Run Discovery first.");
+  const ids = [...document.querySelectorAll(".research-pick:checked")].map((el) => el.value);
+  setArgosState("verify", "Verification in motion", "Original excerpts are not rewritten.");
+  try {
+    const r = await fetch(`/api/v1/research/${state.researchId}/verify`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        scope: $("research-v-scope").value,
+        level: $("research-v-level").value,
+        ids,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Verify failed");
+    setArgosState("done", "Assessments ready", d.banner);
+    renderVerify(d);
+    await loadResearchInbox(state.researchId, d);
+    researchTab("verify");
+  } catch (e) {
+    setArgosState("error", "Verification stopped", e.message);
+  }
+}
+
+async function replayResearch() {
+  if (!state.researchId) return;
+  const r = await fetch(`/api/v1/research/${state.researchId}/replay`, { method: "POST", headers: authHeaders() });
+  const d = await r.json();
+  renderVerify(d);
+}
+
+async function cancelResearch() {
+  if (!state.researchId) return;
+  await fetch(`/api/v1/research/${state.researchId}/cancel`, { method: "POST", headers: authHeaders() });
+  setArgosState("idle", "Cancelled", "No new collection will start.");
+}
+
+async function exportResearch() {
+  if (!state.researchId) return;
+  const r = await fetch(`/api/v1/research/${state.researchId}/export`, { headers: authHeaders() });
+  const d = await r.json();
+  const blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "argoscout-research.json";
+  a.click();
+}
+
 async function openPlaybook() {
   $("playbook-overlay").classList.add("open");
   try {
@@ -1250,6 +1480,21 @@ function init() {
   $("btn-osint").addEventListener("click", runOsint);
   $("btn-gdpr-scan").addEventListener("click", runGdprScan);
   $("btn-apex-run")?.addEventListener("click", runApex);
+  $("btn-research-run")?.addEventListener("click", runResearch);
+  $("btn-research-cancel")?.addEventListener("click", cancelResearch);
+  $("btn-research-export")?.addEventListener("click", exportResearch);
+  $("btn-research-verify")?.addEventListener("click", verifyResearch);
+  $("btn-research-replay")?.addEventListener("click", replayResearch);
+  $("research-mode")?.addEventListener("change", loadResearchForecast);
+  $("research-workflow")?.addEventListener("change", loadResearchForecast);
+  $("research-filter")?.addEventListener("input", () => state.researchId && loadResearchInbox(state.researchId));
+  $("research-type-filter")?.addEventListener("change", () => state.researchId && loadResearchInbox(state.researchId));
+  document.querySelectorAll(".research-tab").forEach((btn) => {
+    btn.addEventListener("click", () => researchTab(btn.dataset.rtab));
+  });
+  document.querySelectorAll(".chip[data-research]").forEach((el) => {
+    el.addEventListener("click", () => { $("research-query").value = el.dataset.research; });
+  });
   $("btn-playbook")?.addEventListener("click", openPlaybook);
   $("btn-playbook-close")?.addEventListener("click", closePlaybook);
   $("btn-risk-notice")?.addEventListener("click", openRiskNotice);

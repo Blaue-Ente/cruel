@@ -101,8 +101,10 @@ def init_db() -> None:
         )
         conn.commit()
     from app.osint.graph import init_graph_tables
+    from app.research.store import init_research_tables
 
     init_graph_tables()
+    init_research_tables()
 
 
 @contextmanager

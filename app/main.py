@@ -22,6 +22,7 @@ from app.config import (
     admin_secret_is_insecure,
 )
 from app.compliance.policy import PolicyEngine, get_policy_status
+from app.compliance.risk_gate import RiskCapabilityOff, get_status as get_risk_status
 from app.compliance.gdpr_gate import apply_gdpr_gate, scan_for_pii
 from app.compliance.layers import list_layers, resolve_layer
 from app.seo_autopsy import seo_autopsy
@@ -71,6 +72,11 @@ from app.models import (
     ApexRequest,
     CorporateIntelRequest,
     LawfulFallbackRequest,
+    RiskAcknowledgeRequest,
+    RiskCapabilitiesRequest,
+    FlareSolverrRequest,
+    LinkedInFetchRequest,
+    GithubEmailsRequest,
     DashboardStats,
     LLMCommandJSON,
     ScrapeRequest,
@@ -137,6 +143,11 @@ async def unsafe_url_handler(_request, exc: UnsafeURLError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
+@app.exception_handler(RiskCapabilityOff)
+async def risk_cap_handler(_request, exc: RiskCapabilityOff):
+    return JSONResponse(status_code=403, content={"detail": str(exc), "capability": exc.capability})
+
+
 @app.get("/")
 async def root():
     return FileResponse(static_dir / "index.html")
@@ -144,6 +155,7 @@ async def root():
 
 @app.get("/health")
 async def health():
+    risk = get_risk_status()
     return {
         "status": "ok",
         "app": APP_NAME,
@@ -166,6 +178,10 @@ async def health():
             "admin_secret_insecure": admin_secret_is_insecure(),
             "admin_secret_source": ADMIN_SECRET_SOURCE,
             "websocket_requires_api_key": True,
+        },
+        "risk": {
+            "acknowledged": risk["acknowledged"],
+            "any_enabled": risk["any_enabled"],
         },
     }
 
@@ -504,6 +520,81 @@ async def api_osint_corporate(body: CorporateIntelRequest, _key: dict = Depends(
 
     result = await asyncio.to_thread(corporate_intel, body.name, body.url, body.country)
     log_scrape(body.name or body.url, "corporate", items_count=1, success=result.get("success", False))
+    return result
+
+
+@app.get("/api/v1/compliance/risk")
+async def api_risk_notice():
+    from app.compliance.risk_gate import get_notice
+
+    return get_notice()
+
+
+@app.get("/api/v1/compliance/risk/status")
+async def api_risk_status(_key: dict = Depends(require_api_key)):
+    return get_risk_status()
+
+
+@app.post("/api/v1/compliance/risk/acknowledge")
+async def api_risk_ack(body: RiskAcknowledgeRequest, _key: dict = Depends(require_api_key)):
+    from app.compliance.risk_gate import acknowledge
+
+    result = acknowledge(body.phrase, authorized_use=body.authorized_use, capabilities=body.capabilities)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error") or "Acknowledgment rejected")
+    return result
+
+
+@app.post("/api/v1/compliance/risk/capabilities")
+async def api_risk_caps(body: RiskCapabilitiesRequest, _key: dict = Depends(require_api_key)):
+    from app.compliance.risk_gate import update_capabilities
+
+    result = update_capabilities(body.capabilities)
+    if not result.get("ok"):
+        raise HTTPException(status_code=403, detail=result.get("error") or "Not acknowledged")
+    return result
+
+
+@app.post("/api/v1/compliance/risk/revoke")
+async def api_risk_revoke(_key: dict = Depends(require_api_key)):
+    from app.compliance.risk_gate import revoke
+
+    return revoke()
+
+
+@app.post("/api/v1/recon/flaresolverr")
+async def api_flaresolverr(body: FlareSolverrRequest, _key: dict = Depends(require_api_key)):
+    from app.compliance.risk_gate import require_capability
+    from app.recon.flaresolverr import fetch_via_flaresolverr
+
+    require_capability("flaresolverr")
+    result = await asyncio.to_thread(fetch_via_flaresolverr, str(body.url))
+    log_scrape(str(body.url), "flaresolverr", items_count=1, success=result.get("ok", False))
+    return result
+
+
+@app.post("/api/v1/osint/linkedin")
+async def api_linkedin(body: LinkedInFetchRequest, _key: dict = Depends(require_api_key)):
+    from app.compliance.risk_gate import require_capability
+    from app.osint.linkedin import fetch_linkedin_public
+
+    require_capability("linkedin_public_fetch")
+    result = await asyncio.to_thread(fetch_linkedin_public, str(body.url))
+    log_scrape(str(body.url), "linkedin", items_count=1, success=result.get("ok", False))
+    return result
+
+
+@app.post("/api/v1/osint/github-emails")
+async def api_github_emails(body: GithubEmailsRequest, _key: dict = Depends(require_api_key)):
+    from app.compliance.risk_gate import require_capability
+    from app.osint.github_emails import parse_repo, public_commit_emails
+
+    require_capability("github_commit_emails")
+    owner, repo = parse_repo(body.url or body.owner, body.repo)
+    if not owner or not repo:
+        raise HTTPException(status_code=400, detail="Provide owner and repo, or a github.com/owner/repo URL.")
+    result = await asyncio.to_thread(public_commit_emails, owner, repo, limit=body.limit)
+    log_scrape(f"{owner}/{repo}", "github_emails", items_count=result.get("count") or 0, success=result.get("ok", False))
     return result
 
 

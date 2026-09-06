@@ -54,6 +54,9 @@ def capture_screenshot(url: str, width: int = 1280, height: int = 900) -> tuple[
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
                 context = browser.new_context(**kwargs)
+                from app.browser.fingerprint import apply_fingerprint
+
+                apply_fingerprint(context, "desktop_chrome")
                 page = context.new_page()
                 page.goto(url, wait_until="networkidle", timeout=25000)
                 human_idle(page, 200, 600)

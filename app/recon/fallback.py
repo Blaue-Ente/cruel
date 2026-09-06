@@ -189,8 +189,39 @@ def lawful_fallback(url: str) -> dict[str, Any]:
         result["success"] = True
         result["winning_method"] = result["winning_method"] or "common_crawl"
 
+    if result.get("live_blocked") or not result.get("success"):
+        from app.compliance.risk_gate import is_enabled
+        from app.http_impersonate import impersonate_get
+        from app.recon.flaresolverr import fetch_via_flaresolverr
+
+        if is_enabled("tls_impersonate"):
+            result["methods"].append("tls_impersonate")
+            tls = impersonate_get(url)
+            result["findings"]["tls_impersonate"] = {
+                "ok": tls.get("ok"),
+                "status": tls.get("status"),
+                "disabled": tls.get("disabled"),
+                "error": tls.get("error"),
+            }
+            if tls.get("ok"):
+                result["success"] = True
+                result["winning_method"] = result["winning_method"] or "tls_impersonate"
+        if is_enabled("flaresolverr") and not result.get("success"):
+            result["methods"].append("flaresolverr")
+            fs = fetch_via_flaresolverr(url)
+            result["findings"]["flaresolverr"] = {
+                "ok": fs.get("ok"),
+                "status": fs.get("status"),
+                "disabled": fs.get("disabled"),
+                "error": fs.get("error"),
+                "bytes": fs.get("bytes"),
+            }
+            if fs.get("ok"):
+                result["success"] = True
+                result["winning_method"] = "flaresolverr"
+
     result["message"] = (
         f"Fallback {'succeeded via ' + result['winning_method'] if result['success'] else 'completed without a winning source'} "
-        f"({len(result['methods'])} public methods)."
+        f"({len(result['methods'])} methods)."
     )
     return result

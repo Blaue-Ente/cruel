@@ -15,7 +15,7 @@ DATABASE_PATH = Path(os.getenv("DATABASE_PATH", DATA_DIR / "cruel_app.db"))
 PREFERENCES_PATH = Path(os.getenv("PREFERENCES_PATH", DATA_DIR / "preferences.json"))
 
 APP_NAME = os.getenv("APP_NAME", "ArgosScout")
-APP_VERSION = os.getenv("APP_VERSION", "8.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "8.1.0")
 
 SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY", "")
 
@@ -162,6 +162,13 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
 APEX_MAX_STEPS = int(os.getenv("APEX_MAX_STEPS", "8"))
 APEX_MAX_SOURCES = int(os.getenv("APEX_MAX_SOURCES", "6"))
+
+# High-risk operator options — all off until acknowledged in-app
+RISK_ACK_PATH = Path(os.getenv("RISK_ACK_PATH", DATA_DIR / "risk_ack.json"))
+FLARESOLVERR_URL = os.getenv("FLARESOLVERR_URL", "").rstrip("/")
+FLARESOLVERR_TIMEOUT_MS = int(os.getenv("FLARESOLVERR_TIMEOUT_MS", "45000"))
+FLARESOLVERR_ALLOW_REMOTE = os.getenv("FLARESOLVERR_ALLOW_REMOTE", "false").lower() == "true"
+CURL_CFFI_IMPERSONATE = os.getenv("CURL_CFFI_IMPERSONATE", "chrome")
 
 _log = logging.getLogger("argoscout")
 

@@ -472,6 +472,19 @@ body.copilot-open .copilot-dock { display: flex; }
 }
 .playbook-item h4 { font-size: .92rem; margin-bottom: .25rem; }
 .playbook-item .tag { font-size: .68rem; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; }
+.risk-notice {
+  white-space: pre-wrap;
+  font-size: .78rem;
+  line-height: 1.45;
+  max-height: 280px;
+  overflow: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .75rem .85rem;
+  margin: .4rem 0 .8rem;
+  color: var(--text);
+}
 .dossier-kicker { font-size: .78rem; color: var(--muted); margin-bottom: .5rem; }
 .dossier-headline { font-size: 1.05rem; font-weight: 700; margin-bottom: .5rem; }
 

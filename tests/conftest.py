@@ -13,6 +13,7 @@ _TMP = tempfile.mkdtemp(prefix="argoscout-test-")
 os.environ["DATA_DIR"] = _TMP
 os.environ["DATABASE_PATH"] = str(Path(_TMP) / "test.db")
 os.environ["PREFERENCES_PATH"] = str(Path(_TMP) / "preferences.json")
+os.environ["RISK_ACK_PATH"] = str(Path(_TMP) / "risk_ack.json")
 os.environ["PREDICTIVE_ENABLED"] = "false"
 os.environ["INBOX_ENABLED"] = "false"
 os.environ["ADMIN_SECRET"] = "test-admin-secret-xyz"

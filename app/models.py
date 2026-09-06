@@ -282,6 +282,14 @@ class ResearchMergeRequest(BaseModel):
     reason: str = "operator merge"
 
 
+class ResearchChipRequest(BaseModel):
+    confirmed: bool = False
+
+
+class PheromoneFlushRequest(BaseModel):
+    confirm: bool = False
+
+
 class GdprScanRequest(BaseModel):
     text: str
     privacy_layer: Optional[str] = None

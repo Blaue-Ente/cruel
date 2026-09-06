@@ -314,6 +314,9 @@ def run_verification(
 
     store.add_event(task_id, "report", "Verification finished. Original excerpts were not rewritten.")
     store.record_tool_run(task_id, "verification", f"verify_{level}", True, requests=budget.requests, tokens=0)
+    from app.research.hooks import after_verification
+
+    after_verification(task_id)
     return {
         "task_id": task_id,
         "scope": scope,

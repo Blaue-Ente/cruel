@@ -15,6 +15,9 @@ TABLES = (
     "research_claims",
     "research_entities",
     "research_documents",
+    "research_edges",
+    "research_snapshots",
+    "research_chips",
     "research_tool_runs",
     "research_policy",
     "research_events",
@@ -211,6 +214,61 @@ def init_research_tables() -> None:
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_research_docs_task ON research_documents(task_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_research_claims_task ON research_claims(task_id)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS research_edges (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                source_kind TEXT NOT NULL,
+                source_label TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                target_kind TEXT NOT NULL,
+                target_label TEXT NOT NULL,
+                rel_type TEXT NOT NULL,
+                layer TEXT NOT NULL,
+                document_ids TEXT,
+                claim_ids TEXT,
+                snippet TEXT,
+                source_tool TEXT,
+                citations INTEGER NOT NULL DEFAULT 0,
+                meta TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(task_id) REFERENCES research_tasks(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS research_snapshots (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                target TEXT NOT NULL,
+                trigger TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                layer_a_hash TEXT NOT NULL,
+                layer_b_hash TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                FOREIGN KEY(task_id) REFERENCES research_tasks(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS research_chips (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                event TEXT NOT NULL,
+                intent TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                consumed INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(task_id) REFERENCES research_tasks(id)
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_research_edges_task ON research_edges(task_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_research_snaps_target ON research_snapshots(target)")
         conn.commit()
 
 
@@ -697,6 +755,9 @@ def erase_task(task_id: str) -> dict[str, Any]:
             "research_documents",
             "research_entities",
             "research_claims",
+            "research_edges",
+            "research_snapshots",
+            "research_chips",
             "research_tool_runs",
             "research_policy",
             "research_events",
@@ -706,3 +767,186 @@ def erase_task(task_id: str) -> dict[str, Any]:
         conn.execute("DELETE FROM research_tasks WHERE id = ?", (task_id,))
         conn.commit()
     return {"ok": True, "erased": task_id}
+
+
+def replace_edges(task_id: str, edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    now = _now()
+    with get_connection() as conn:
+        conn.execute("DELETE FROM research_edges WHERE task_id = ?", (task_id,))
+        stored = []
+        for edge in edges:
+            edge_id = edge.get("id") or str(uuid.uuid4())
+            conn.execute(
+                """
+                INSERT INTO research_edges (
+                    id, task_id, source_id, source_kind, source_label, target_id, target_kind,
+                    target_label, rel_type, layer, document_ids, claim_ids, snippet, source_tool,
+                    citations, meta, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    edge_id,
+                    task_id,
+                    edge.get("source_id") or "",
+                    edge.get("source_kind") or "",
+                    edge.get("source_label") or "",
+                    edge.get("target_id") or "",
+                    edge.get("target_kind") or "",
+                    edge.get("target_label") or "",
+                    edge.get("rel_type") or "cites",
+                    edge.get("layer") or "unverified",
+                    _json(edge.get("document_ids") or []),
+                    _json(edge.get("claim_ids") or []),
+                    (edge.get("snippet") or "")[:800],
+                    edge.get("source_tool") or "",
+                    int(edge.get("citations") or 0),
+                    _json(edge.get("meta") or {}),
+                    now,
+                ),
+            )
+            stored.append(get_edge(edge_id) or edge)
+        conn.commit()
+    return list_edges(task_id)
+
+
+def list_edges(task_id: str) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM research_edges WHERE task_id = ? ORDER BY rel_type, id",
+            (task_id,),
+        ).fetchall()
+    return [_edge_row(row) for row in rows]
+
+
+def get_edge(edge_id: str) -> Optional[dict[str, Any]]:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM research_edges WHERE id = ?", (edge_id,)).fetchone()
+    return _edge_row(row) if row else None
+
+
+def _edge_row(row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "task_id": row["task_id"],
+        "source_id": row["source_id"],
+        "source_kind": row["source_kind"],
+        "source_label": row["source_label"],
+        "target_id": row["target_id"],
+        "target_kind": row["target_kind"],
+        "target_label": row["target_label"],
+        "rel_type": row["rel_type"],
+        "layer": row["layer"],
+        "document_ids": _load(row["document_ids"], []),
+        "claim_ids": _load(row["claim_ids"], []),
+        "snippet": row["snippet"],
+        "source_tool": row["source_tool"],
+        "citations": row["citations"],
+        "meta": _load(row["meta"]),
+        "created_at": row["created_at"],
+    }
+
+
+def add_snapshot(task_id: str, target: str, trigger: str, layer_a_hash: str, layer_b_hash: str, payload: dict[str, Any]) -> dict[str, Any]:
+    snap_id = str(uuid.uuid4())
+    now = _now()
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO research_snapshots
+            (id, task_id, target, trigger, timestamp, layer_a_hash, layer_b_hash, payload)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (snap_id, task_id, target, trigger, now, layer_a_hash, layer_b_hash, _json(payload)),
+        )
+        conn.commit()
+    return get_snapshot(snap_id)
+
+
+def get_snapshot(snap_id: str) -> Optional[dict[str, Any]]:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM research_snapshots WHERE id = ?", (snap_id,)).fetchone()
+    return _snap_row(row) if row else None
+
+
+def list_snapshots(task_id: str = "", target: str = "", limit: int = 40) -> list[dict[str, Any]]:
+    sql = "SELECT * FROM research_snapshots WHERE 1=1"
+    args: list[Any] = []
+    if task_id:
+        sql += " AND task_id = ?"
+        args.append(task_id)
+    if target:
+        sql += " AND target = ?"
+        args.append(target)
+    sql += " ORDER BY timestamp DESC LIMIT ?"
+    args.append(limit)
+    with get_connection() as conn:
+        rows = conn.execute(sql, args).fetchall()
+    return [_snap_row(row) for row in rows]
+
+
+def _snap_row(row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "task_id": row["task_id"],
+        "target": row["target"],
+        "trigger": row["trigger"],
+        "timestamp": row["timestamp"],
+        "layer_a_hash": row["layer_a_hash"],
+        "layer_b_hash": row["layer_b_hash"],
+        "payload": _load(row["payload"]),
+    }
+
+
+def replace_chips(task_id: str, event: str, chips: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    now = _now()
+    with get_connection() as conn:
+        conn.execute("DELETE FROM research_chips WHERE task_id = ? AND consumed = 0", (task_id,))
+        for chip in chips:
+            conn.execute(
+                """
+                INSERT INTO research_chips (id, task_id, event, intent, payload, consumed, created_at)
+                VALUES (?, ?, ?, ?, ?, 0, ?)
+                """,
+                (chip["id"], task_id, event, chip.get("intent") or "", _json(chip), now),
+            )
+        conn.commit()
+    return list_chips(task_id)
+
+
+def list_chips(task_id: str, include_consumed: bool = False) -> list[dict[str, Any]]:
+    sql = "SELECT * FROM research_chips WHERE task_id = ?"
+    if not include_consumed:
+        sql += " AND consumed = 0"
+    sql += " ORDER BY created_at"
+    with get_connection() as conn:
+        rows = conn.execute(sql, (task_id,)).fetchall()
+    out = []
+    for row in rows:
+        payload = _load(row["payload"])
+        payload["id"] = row["id"]
+        payload["event"] = row["event"]
+        payload["consumed"] = bool(row["consumed"])
+        out.append(payload)
+    return out
+
+
+def get_chip(task_id: str, chip_id: str) -> Optional[dict[str, Any]]:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM research_chips WHERE id = ? AND task_id = ?",
+            (chip_id, task_id),
+        ).fetchone()
+    if not row:
+        return None
+    payload = _load(row["payload"])
+    payload["id"] = row["id"]
+    payload["event"] = row["event"]
+    payload["consumed"] = bool(row["consumed"])
+    payload["intent"] = row["intent"]
+    return payload
+
+
+def mark_chip_consumed(chip_id: str) -> None:
+    with get_connection() as conn:
+        conn.execute("UPDATE research_chips SET consumed = 1 WHERE id = ?", (chip_id,))
+        conn.commit()

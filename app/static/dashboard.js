@@ -61,6 +61,8 @@ const state = {
   reducedMotion: localStorage.getItem("argos_reduced_motion") === "true",
   copilotDock: localStorage.getItem("argos_copilot_dock") !== "false",
   researchId: localStorage.getItem("argos_research_id") || "",
+  researchTab: localStorage.getItem("argos_research_tab") || "inbox",
+  graphFocus: "",
 };
 
 function resolvedLocale() {
@@ -84,6 +86,7 @@ function saveState() {
   localStorage.setItem("argos_reduced_motion", String(state.reducedMotion));
   localStorage.setItem("argos_copilot_dock", String(state.copilotDock));
   localStorage.setItem("argos_research_id", state.researchId || "");
+  localStorage.setItem("argos_research_tab", state.researchTab || "inbox");
 }
 
 function applyChrome() {
@@ -127,7 +130,12 @@ function showPage(id) {
   if (id === "apex") loadLastApex();
   if (id === "research") {
     loadResearchForecast();
-    if (state.researchId) loadResearchInbox(state.researchId);
+    loadEfficiencyTelemetry();
+    if (state.researchId) {
+      loadResearchInbox(state.researchId);
+      loadMissionChips();
+    }
+    researchTab(state.researchTab || "inbox");
   }
   if (id === "settings") loadRiskStatus();
   loadCopilotContext();
@@ -953,8 +961,18 @@ function setArgosState(kind, caption, sub) {
 }
 
 function researchTab(id) {
+  if (!id) return;
+  state.researchTab = id;
+  localStorage.setItem("argos_research_tab", id);
   document.querySelectorAll(".research-tab").forEach((el) => el.classList.toggle("active", el.dataset.rtab === id));
   document.querySelectorAll(".research-panel").forEach((el) => el.classList.toggle("active", el.id === `rtab-${id}`));
+  if (id === "graph" && state.researchId) loadResearchGraph();
+  if (id === "inspector") loadEfficiencyTelemetry();
+  if (id === "report" && state.researchId) loadSnapshotSelects();
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
 async function loadResearchForecast() {
@@ -1071,9 +1089,13 @@ async function loadResearchInbox(taskId, extra) {
   renderInbox(pack);
   renderVerify(extra || pack);
   renderReport(pack);
+  applyMission(pack.mission);
   if ($("research-inspector")) $("research-inspector").textContent = JSON.stringify(pack, null, 2);
   const counts = pack.counts || {};
   $("research-run-status").textContent = `${pack.task?.status || ""} · ${counts.documents || 0} materials · ${counts.unverified || 0} unverified`;
+  if (state.researchTab === "graph") loadResearchGraph();
+  loadEfficiencyTelemetry();
+  loadSnapshotSelects();
   return pack;
 }
 
@@ -1106,8 +1128,12 @@ async function runResearch() {
     renderInbox(d);
     renderVerify(d);
     renderReport(d);
+    applyMission(d.mission);
     if ($("research-inspector")) $("research-inspector").textContent = JSON.stringify(d, null, 2);
     $("research-run-status").textContent = `${done} · ${d.counts?.documents || 0} materials`;
+    loadEfficiencyTelemetry();
+    loadSnapshotSelects();
+    if (state.researchTab === "graph") loadResearchGraph();
     if (d.task.workflow === "discover_then_verify") {
       setArgosState("verify", "Weighing collected evidence", "No single truth score. Independence groups copies of the same story.");
       researchTab("verify");
@@ -1138,6 +1164,8 @@ async function verifyResearch() {
     setArgosState("done", "Assessments ready", d.banner);
     renderVerify(d);
     await loadResearchInbox(state.researchId, d);
+    loadMissionChips();
+    if (state.researchTab === "graph") loadResearchGraph();
     researchTab("verify");
   } catch (e) {
     setArgosState("error", "Verification stopped", e.message);
@@ -1159,13 +1187,365 @@ async function cancelResearch() {
 
 async function exportResearch() {
   if (!state.researchId) return;
-  const r = await fetch(`/api/v1/research/${state.researchId}/export`, { headers: authHeaders() });
+  const fmt = $("research-export-format")?.value || "json";
+  const r = await fetch(`/api/v1/research/${state.researchId}/export?format=${encodeURIComponent(fmt)}`, { headers: authHeaders() });
   const d = await r.json();
-  const blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
+  if (!r.ok) throw new Error(d.detail || "Export failed");
+  let blob;
+  let name;
+  if (fmt === "markdown") {
+    blob = new Blob([d.markdown || ""], { type: "text/markdown" });
+    name = "argoscout-dossier.md";
+  } else if (fmt === "html") {
+    blob = new Blob([d.html || ""], { type: "text/html" });
+    name = "argoscout-dossier.html";
+  } else {
+    blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
+    name = "argoscout-research.json";
+  }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "argoscout-research.json";
+  a.download = name;
   a.click();
+}
+
+function addCopilotCard(card) {
+  const el = document.createElement("article");
+  el.className = "copilot-card";
+  el.innerHTML = `<strong>${esc(card.title || "Mission")}</strong>
+    <p class="muted-sm">${esc(card.note || "")}</p>
+    ${card.ran ? `<p class="muted-sm">Ran: ${esc((card.ran || []).join(", "))}</p>` : ""}`;
+  $("copilot-messages")?.appendChild(el);
+  $("copilot-messages").scrollTop = $("copilot-messages").scrollHeight;
+}
+
+function applyMission(mission) {
+  const chips = mission?.chips || [];
+  renderMissionChips(chips);
+  if (chips.length) {
+    state.copilotDock = true;
+    applyChrome();
+  }
+}
+
+function renderMissionChips(chips) {
+  const box = $("copilot-action-chips");
+  if (!box) return;
+  if (!chips.length) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = chips.map((c) =>
+    `<button type="button" class="mission-chip" data-chip="${esc(c.id)}" title="${esc(c.intent)}">${esc(c.label)}</button>`
+  ).join("");
+  box.querySelectorAll(".mission-chip").forEach((btn) => {
+    btn.addEventListener("click", () => previewChip(btn.dataset.chip));
+  });
+}
+
+async function loadMissionChips() {
+  if (!state.apiKey || !state.researchId) return;
+  try {
+    const r = await fetch(`/api/v1/research/${state.researchId}/chips`, { headers: authHeaders() });
+    if (!r.ok) return;
+    applyMission(await r.json());
+  } catch {}
+}
+
+async function previewChip(chipId) {
+  if (!state.researchId || !chipId) return;
+  const r = await fetch(`/api/v1/research/${state.researchId}/chips/${chipId}`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ confirmed: false }),
+  });
+  const d = await r.json();
+  const box = $("chip-confirm");
+  if (!box) return;
+  const fc = d.forecast || d.chip?.cost_forecast || {};
+  box.hidden = false;
+  box.innerHTML = `<div>${esc(d.message || "Confirm this action.")}</div>
+    <div class="muted-sm">Forecast: ~${esc(fc.requests ?? 0)} requests, ${esc(fc.byok_cost_est || "$0.00")} · ${esc(fc.note || "Not a bill.")}</div>
+    <div class="row">
+      <button class="btn btn-primary btn-sm" type="button" id="chip-go">Confirm & run</button>
+      <button class="btn btn-secondary btn-sm" type="button" id="chip-cancel">Cancel</button>
+    </div>`;
+  $("chip-go")?.addEventListener("click", () => runChip(chipId));
+  $("chip-cancel")?.addEventListener("click", () => { box.hidden = true; box.innerHTML = ""; });
+}
+
+async function runChip(chipId) {
+  const box = $("chip-confirm");
+  if (box) { box.hidden = true; box.innerHTML = ""; }
+  addCopilotMsg("Running confirmed chip…", "sys");
+  try {
+    const r = await fetch(`/api/v1/research/${state.researchId}/chips/${chipId}`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ confirmed: true }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || d.error || "Chip failed");
+    addCopilotCard(d.card || { title: d.chip?.label, note: d.banner, ran: d.summary?.ran });
+    if (d.inbox) {
+      renderInbox(d.inbox);
+      renderVerify(d.inbox);
+      renderReport(d.inbox);
+    }
+    applyMission((d.inbox || {}).mission);
+    loadResearchGraph();
+    loadEfficiencyTelemetry();
+    loadSnapshotSelects();
+  } catch (e) {
+    addCopilotMsg("Chip error: " + e.message, "sys");
+  }
+}
+
+function layoutGraph(nodes) {
+  const cx = 460, cy = 270;
+  const rings = { target: 0, organization: 120, person: 190, host: 190, identifier: 250, artifact: 310 };
+  const grouped = {};
+  nodes.forEach((n) => {
+    const k = n.kind || "artifact";
+    (grouped[k] = grouped[k] || []).push(n);
+  });
+  const placed = [];
+  Object.entries(grouped).forEach(([kind, list]) => {
+    const r = rings[kind] ?? 280;
+    list.forEach((n, i) => {
+      const offset = kind === "host" ? 0.4 : kind === "person" ? -0.3 : 0;
+      const angle = (Math.PI * 2 * i) / Math.max(list.length, 1) - Math.PI / 2 + offset;
+      placed.push({
+        ...n,
+        x: r === 0 ? cx : cx + Math.cos(angle) * r,
+        y: r === 0 ? cy : cy + Math.sin(angle) * r * 0.78,
+      });
+    });
+  });
+  return placed;
+}
+
+const NODE_MARK = {
+  target: "◎",
+  organization: "▣",
+  person: "◉",
+  host: "⬡",
+  identifier: "#",
+  artifact: "▦",
+};
+
+function renderGraph(pack) {
+  const svg = $("research-graph");
+  if (!svg) return;
+  const nodes = layoutGraph(pack.nodes || []);
+  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const edges = pack.edges || [];
+  const lines = edges.map((e) => {
+    const a = byId[e.source || e.source_id];
+    const b = byId[e.target || e.target_id];
+    if (!a || !b) return "";
+    const dash = e.dash && e.dash !== "none" ? `stroke-dasharray="${esc(e.dash)}"` : "";
+    const selected = state.graphFocus === e.id ? "stroke-width=\"3\"" : "stroke-width=\"1.6\"";
+    return `<line class="graph-edge" data-id="${esc(e.id)}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"
+      stroke="${esc(e.stroke || "#f59e0b")}" ${dash} opacity="${e.opacity ?? 0.7}" ${selected}>
+      <title>${esc(e.tooltip || e.rel_type)}</title></line>`;
+  }).join("");
+  const dots = nodes.map((n) => {
+    const fill = n.kind === "target" ? "#76b900" : n.kind === "person" ? "#5b8cff" : n.kind === "host" ? "#94a3b8" : "#1e2433";
+    const ring = state.graphFocus === n.id ? "#eef1f7" : "#2a3144";
+    return `<g class="graph-node" data-id="${esc(n.id)}" transform="translate(${n.x},${n.y})">
+      <circle r="18" fill="${fill}" stroke="${ring}" stroke-width="2"/>
+      <text text-anchor="middle" dy="-22" class="badge">${esc(n.type || n.kind)}</text>
+      <text text-anchor="middle" dy="5">${esc(NODE_MARK[n.kind] || "•")}</text>
+      <text text-anchor="middle" dy="34">${esc((n.label || "").slice(0, 22))}</text>
+    </g>`;
+  }).join("");
+  svg.innerHTML = `<rect width="920" height="540" fill="transparent"/>${lines}${dots}`;
+  svg.querySelectorAll(".graph-edge").forEach((el) => {
+    el.addEventListener("click", (ev) => { ev.stopPropagation(); openGraphDrawer(el.dataset.id); });
+  });
+  svg.querySelectorAll(".graph-node").forEach((el) => {
+    el.addEventListener("click", (ev) => { ev.stopPropagation(); openGraphDrawer(el.dataset.id); });
+  });
+}
+
+async function loadResearchGraph() {
+  if (!state.apiKey || !state.researchId) return;
+  const svg = $("research-graph");
+  if (svg) svg.innerHTML = `<text x="20" y="30" fill="#8b93a7">Loading graph…</text>`;
+  try {
+    const r = await fetch(`/api/v1/research/${state.researchId}/graph`, { headers: authHeaders() });
+    if (!r.ok) return;
+    renderGraph(await r.json());
+  } catch (e) {
+    if (svg) svg.innerHTML = `<text x="20" y="30" fill="#ff6b6b">${esc(e.message)}</text>`;
+  }
+}
+
+async function openGraphDrawer(elementId) {
+  state.graphFocus = elementId;
+  const drawer = $("graph-drawer");
+  const body = $("graph-drawer-body");
+  if (!drawer || !body) return;
+  drawer.hidden = false;
+  body.innerHTML = "<p class='muted-sm'>Loading evidence…</p>";
+  try {
+    const r = await fetch(`/api/v1/research/${state.researchId}/graph/${encodeURIComponent(elementId)}`, { headers: authHeaders() });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Not found");
+    const el = d.element || {};
+    $("graph-drawer-title").textContent = el.label || el.rel_type || "Inspector";
+    const sources = (d.sources || []).map((s) => `
+      <div class="src">
+        <div>${esc(s.title || "")}</div>
+        <div>${esc(s.url || "")}</div>
+        <div>${esc(s.fetched_at || "")} · ${esc(s.method || "")}</div>
+        <p>${esc((s.excerpt || "").slice(0, 280))}</p>
+        <div>sha256 ${esc((s.content_hash || "").slice(0, 16))}…</div>
+      </div>`).join("") || "<p class='muted-sm'>No source snippets on this element.</p>";
+    const fc = d.verify?.forecast || {};
+    const canVerify = d.verify?.available;
+    body.innerHTML = `
+      <p class="muted-sm">${esc(d.kind)} · ${esc(el.layer || el.kind || "")} · ${esc(el.rel_type || "")}</p>
+      <p class="muted-sm">${esc((d.confidence && JSON.stringify(d.confidence)) || d.snippet || "")}</p>
+      ${sources}
+      ${canVerify ? `<button class="btn btn-primary" type="button" id="btn-verify-edge">Verify Only This Edge</button>
+        <p class="muted-sm">Forecast: ~${esc(fc.requests ?? 0)} requests, ${esc(fc.byok_cost_est || "$0.00")}</p>` : ""}`;
+    $("btn-verify-edge")?.addEventListener("click", () => verifyGraphEdge(elementId, fc));
+    loadResearchGraph();
+  } catch (e) {
+    body.innerHTML = `<p class="error-state">${esc(e.message)}</p>`;
+  }
+}
+
+async function verifyGraphEdge(elementId, forecast) {
+  const fc = forecast || {};
+  if (!window.confirm(`Verify only this edge?\nForecast: ~${fc.requests ?? 0} requests, ${fc.byok_cost_est || "$0.00"}`)) return;
+  try {
+    const r = await fetch(`/api/v1/research/${state.researchId}/graph/${encodeURIComponent(elementId)}/verify`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Verify failed");
+    if (d.graph) renderGraph(d.graph);
+    await loadResearchInbox(state.researchId, d.verification);
+    openGraphDrawer(elementId);
+    addCopilotCard({ title: "Edge verified", note: d.verification?.banner, ran: ["verify_analyze"] });
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+function closeGraphDrawer() {
+  const drawer = $("graph-drawer");
+  if (drawer) drawer.hidden = true;
+  state.graphFocus = "";
+}
+
+function renderTelemetry(t) {
+  if (!t) return "";
+  return `
+    <article class="telemetry-card"><div class="kicker">Pheromones active</div><div class="value">${t.pheromones_active ?? 0}</div><p class="muted-sm">${t.mapped_routes ?? 0} mapped routes</p></article>
+    <article class="telemetry-card"><div class="kicker">Requests saved</div><div class="value">${t.requests_avoided ?? 0}</div><p class="muted-sm">${t.bandwidth_savings?.http_calls_skipped ?? 0} HTTP skips</p></article>
+    <article class="telemetry-card"><div class="kicker">Cost efficiency</div><div class="value">${t.cost_efficiency_index ?? 0}</div><p class="muted-sm">${esc(t.bandwidth_savings?.byok_cost_est || "$0.00")} est. · not a bill</p></article>`;
+}
+
+async function loadEfficiencyTelemetry() {
+  if (!state.apiKey) return;
+  try {
+    const r = await fetch("/api/v1/research/memory/pheromones", { headers: authHeaders() });
+    if (!r.ok) return;
+    const t = await r.json();
+    const grid = $("efficiency-telemetry");
+    if (grid) grid.innerHTML = renderTelemetry(t);
+    const live = $("live-telemetry");
+    if (live) {
+      live.hidden = false;
+      live.innerHTML = `<span>Pheromones ${t.pheromones_active ?? 0}</span><span>Saved ${t.requests_avoided ?? 0} req</span><span>CEI ${t.cost_efficiency_index ?? 0}</span>`;
+    }
+  } catch {}
+}
+
+async function inspectPheromoneMap() {
+  if (!state.apiKey) return alert(t("need_key"));
+  researchTab("inspector");
+  const r = await fetch("/api/v1/research/memory/pheromones/map", { headers: authHeaders() });
+  const d = await r.json();
+  if ($("pheromone-map-view")) $("pheromone-map-view").textContent = JSON.stringify(d, null, 2);
+}
+
+async function flushPheromoneCache() {
+  if (!state.apiKey) return alert(t("need_key"));
+  if (!window.confirm("Flush cached pheromone routes? Historical savings counters stay. Fresh probing will spend requests again.")) return;
+  const r = await fetch("/api/v1/research/memory/pheromones/flush", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ confirm: true }),
+  });
+  const d = await r.json();
+  if ($("pheromone-map-view")) $("pheromone-map-view").textContent = JSON.stringify(d, null, 2);
+  loadEfficiencyTelemetry();
+}
+
+async function loadSnapshotSelects() {
+  if (!state.apiKey || !state.researchId) return;
+  try {
+    const r = await fetch(`/api/v1/research/${state.researchId}/snapshots`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+    const snaps = d.snapshots || [];
+    const opts = snaps.map((s) => `<option value="${esc(s.id)}">${esc(s.trigger)} · ${esc((s.timestamp || "").slice(0, 19))}</option>`).join("");
+    if ($("snap-left")) $("snap-left").innerHTML = opts;
+    if ($("snap-right")) $("snap-right").innerHTML = opts;
+    if (snaps.length >= 2 && $("snap-right")) $("snap-right").selectedIndex = 0;
+    if (snaps.length >= 2 && $("snap-left")) $("snap-left").selectedIndex = Math.min(1, snaps.length - 1);
+  } catch {}
+}
+
+function renderDiffPack(d) {
+  const box = $("research-diff");
+  if (!box) return;
+  const added = d.added || {};
+  const removed = d.removed || {};
+  const modified = d.modified || {};
+  const list = (arr, cls, label) => {
+    const items = arr || [];
+    if (!items.length) return "";
+    return `<article class="research-item"><strong class="${cls}">${label}</strong>${
+      items.map((item) => `<p class="muted-sm">${esc(item.name || item.text || item.title || item.note || item.url || JSON.stringify(item))}</p>`).join("")
+    }</article>`;
+  };
+  box.innerHTML = [
+    list([...(added.personnel || []).map((n) => ({ name: n })), ...(added.entities || [])], "diff-added", "Added"),
+    list(added.domains || [], "diff-added", "Added domains"),
+    list(added.claims || added.documents || [], "diff-added", "Added claims / materials"),
+    list([...(removed.personnel || []).map((n) => ({ name: n })), ...(removed.entities || [])], "diff-removed", "Removed"),
+    list(removed.domains || [], "diff-removed", "Removed domains"),
+    list(modified.claims || modified.documents || [], "diff-modified", "Modified"),
+    d.note ? `<p class="muted-sm">${esc(d.note)}</p>` : "",
+  ].join("") || "<div class='empty-state'>No delta between these snapshots.</div>";
+}
+
+async function compareSnapshots() {
+  const left = $("snap-left")?.value;
+  const right = $("snap-right")?.value;
+  if (!left || !right) return alert("Need two snapshots.");
+  const r = await fetch(`/api/v1/research/snapshots/compare?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`, { headers: authHeaders() });
+  const d = await r.json();
+  if (!r.ok) return alert(d.detail || "Compare failed");
+  renderDiffPack(d);
+}
+
+async function runLookback() {
+  if (!state.researchId) return;
+  const r = await fetch(`/api/v1/research/${state.researchId}/lookback`, { headers: authHeaders() });
+  const d = await r.json();
+  if (!r.ok) return alert(d.detail || "Lookback failed");
+  renderDiffPack(d);
+  loadSnapshotSelects();
 }
 
 async function openPlaybook() {
@@ -1485,6 +1865,11 @@ function init() {
   $("btn-research-export")?.addEventListener("click", exportResearch);
   $("btn-research-verify")?.addEventListener("click", verifyResearch);
   $("btn-research-replay")?.addEventListener("click", replayResearch);
+  $("btn-research-diff")?.addEventListener("click", compareSnapshots);
+  $("btn-research-lookback")?.addEventListener("click", runLookback);
+  $("btn-pheromone-map")?.addEventListener("click", inspectPheromoneMap);
+  $("btn-pheromone-flush")?.addEventListener("click", flushPheromoneCache);
+  $("graph-drawer-close")?.addEventListener("click", closeGraphDrawer);
   $("research-mode")?.addEventListener("change", loadResearchForecast);
   $("research-workflow")?.addEventListener("change", loadResearchForecast);
   $("research-filter")?.addEventListener("input", () => state.researchId && loadResearchInbox(state.researchId));
@@ -1591,6 +1976,7 @@ function init() {
       closePalette();
       closePlaybook();
       closeRiskNotice();
+      closeGraphDrawer();
       toggleShortcuts(false);
     }
     if (e.key === "?" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {

@@ -50,7 +50,7 @@
         <button class="icon-btn" id="btn-locale" title="Language">EN</button>
         <button class="icon-btn" id="btn-playbook" title="Feature Inspector">📘</button>
         <button class="icon-btn" id="btn-shortcuts" title="Shortcuts">?</button>
-        <span class="badge badge-green">v8.2</span>
+        <span class="badge badge-green">v8.3</span>
       </div>
     </header>
 
@@ -266,6 +266,11 @@
               <div class="row">
                 <button class="btn btn-primary" id="btn-research-run" type="button">Discover</button>
                 <button class="btn btn-secondary" id="btn-research-cancel" type="button">Cancel</button>
+                <select id="research-export-format" aria-label="Export format">
+                  <option value="json">Export JSON (Raw)</option>
+                  <option value="markdown">Export Markdown Dossier</option>
+                  <option value="html">Export Executive PDF / Print HTML</option>
+                </select>
                 <button class="btn btn-secondary" id="btn-research-export" type="button">Export</button>
               </div>
               <div id="research-run-status" class="muted-sm" style="margin-top:.6rem">Idle — nothing collected yet.</div>
@@ -287,6 +292,7 @@
                 </div>
                 <div class="argos-caption" id="argos-caption">Waiting for a question</div>
                 <div class="argos-sub" id="argos-sub">Discovery and verification use separate budgets.</div>
+                <div id="live-telemetry" class="telemetry-mini" hidden></div>
               </div>
             </div>
           </div>
@@ -299,6 +305,7 @@
           <button class="research-tab active" data-rtab="inbox" type="button">Inbox</button>
           <button class="research-tab" data-rtab="verify" type="button">Verify</button>
           <button class="research-tab" data-rtab="evidence" type="button">Evidence</button>
+          <button class="research-tab" data-rtab="graph" type="button">Graph</button>
           <button class="research-tab" data-rtab="report" type="button">Report</button>
           <button class="research-tab" data-rtab="inspector" type="button">Developer Inspector</button>
         </div>
@@ -336,11 +343,42 @@
         <div class="research-panel" id="rtab-evidence">
           <div id="research-evidence" class="research-list"><div class="empty-state">Open a claim after verification.</div></div>
         </div>
+        <div class="research-panel" id="rtab-graph">
+          <div class="graph-legend" aria-hidden="true">
+            <span><i class="swatch layer-a"></i> Layer A unverified</span>
+            <span><i class="swatch layer-b"></i> Layer B verified</span>
+            <span><i class="swatch layer-d"></i> Disputed</span>
+          </div>
+          <div class="graph-workspace">
+            <svg id="research-graph" viewBox="0 0 920 540" role="img" aria-label="Evidence graph"></svg>
+            <aside id="graph-drawer" class="graph-drawer" hidden>
+              <header>
+                <strong id="graph-drawer-title">Inspector</strong>
+                <button class="icon-btn" id="graph-drawer-close" type="button" aria-label="Close drawer">✕</button>
+              </header>
+              <div id="graph-drawer-body"></div>
+            </aside>
+          </div>
+          <p class="muted-sm">Click a node or edge to lock focus. Dashed amber = unverified trace; solid emerald = verified citations; dotted red = disputed.</p>
+        </div>
         <div class="research-panel" id="rtab-report">
+          <div class="row" style="margin-bottom:.7rem">
+            <select id="snap-left" aria-label="Earlier snapshot"></select>
+            <select id="snap-right" aria-label="Later snapshot"></select>
+            <button class="btn btn-secondary" id="btn-research-diff" type="button">Compare Snapshots</button>
+            <button class="btn btn-secondary" id="btn-research-lookback" type="button">Wayback lookback</button>
+          </div>
+          <div id="research-diff" class="research-list"></div>
           <div id="research-report" class="research-list"><div class="empty-state">Report appears after Discovery.</div></div>
         </div>
         <div class="research-panel" id="rtab-inspector">
-          <pre id="research-inspector" class="json-view" style="max-height:420px">// Raw JSON hidden from the main workflow</pre>
+          <div id="efficiency-telemetry" class="telemetry-grid"></div>
+          <div class="row" style="margin:.7rem 0">
+            <button class="btn btn-secondary" id="btn-pheromone-map" type="button">Inspect Pheromone Map</button>
+            <button class="btn btn-secondary" id="btn-pheromone-flush" type="button">Flush Cache</button>
+          </div>
+          <pre id="pheromone-map-view" class="json-view" style="max-height:180px">// Pheromone map</pre>
+          <pre id="research-inspector" class="json-view" style="max-height:320px">// Raw JSON hidden from the main workflow</pre>
         </div>
       </section>
 
@@ -880,6 +918,8 @@
       </div>
     </div>
     <div class="copilot-input">
+      <div id="copilot-action-chips" class="mission-chips" hidden></div>
+      <div id="chip-confirm" class="chip-confirm" hidden></div>
       <textarea id="copilot-input" placeholder="Ask Copilot to research, extract, or inspect…"></textarea>
       <button class="btn btn-primary" id="btn-copilot-send" type="button" style="width:100%">Run</button>
     </div>

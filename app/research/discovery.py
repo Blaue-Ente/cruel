@@ -184,29 +184,38 @@ def run_discovery(
 
         target_url = next((u for u in found_urls if u.startswith("http")), "")
         if target_url and mode in {"deep", "custom"} and budget.requests < limits["max_requests"]:
-            fb = _record(task_id, "html_fetch", url=target_url)
-            if fb["allowed"]:
-                try:
-                    budget.consume(requests=1)
-                    store.add_event(task_id, "archives", "Lawful fallback / archives for the named URL.")
-                    result = tools["fallback"](target_url)
-                    store.record_tool_run(task_id, "discovery", "lawful_fallback", bool(result.get("success")), requests=1)
-                    coverage["ran"].append("fallback")
-                    ingest_document(
-                        task_id,
-                        url=target_url,
-                        title=f"Fallback {result.get('winning_method') or 'tree'}",
-                        excerpt=result.get("message") or "",
-                        source_type="archive",
-                        method=result.get("winning_method") or "fallback",
-                        completeness="partial",
-                        meta={"methods": result.get("methods")},
-                    )
-                except Exception as exc:
-                    store.record_tool_run(task_id, "discovery", "lawful_fallback", False, error=str(exc))
+            from app.probe.pheromones import deposit, should_avoid
+
+            if should_avoid(target_url):
+                coverage["skipped"].append("pheromone")
+                store.add_event(task_id, "archives", "Skipped fetch — poison pheromone on this host.")
+                store.record_tool_run(task_id, "discovery", "lawful_fallback", True, requests=0, error="pheromone_skip")
             else:
-                coverage["blocked"].append("fallback")
-                store.add_event(task_id, "archives", fb["reason"])
+                fb = _record(task_id, "html_fetch", url=target_url)
+                if fb["allowed"]:
+                    try:
+                        budget.consume(requests=1)
+                        store.add_event(task_id, "archives", "Lawful fallback / archives for the named URL.")
+                        result = tools["fallback"](target_url)
+                        store.record_tool_run(task_id, "discovery", "lawful_fallback", bool(result.get("success")), requests=1)
+                        coverage["ran"].append("fallback")
+                        ingest_document(
+                            task_id,
+                            url=target_url,
+                            title=f"Fallback {result.get('winning_method') or 'tree'}",
+                            excerpt=result.get("message") or "",
+                            source_type="archive",
+                            method=result.get("winning_method") or "fallback",
+                            completeness="partial",
+                            meta={"methods": result.get("methods")},
+                        )
+                        deposit(target_url, "sweet" if result.get("success") else "poison", result.get("message") or "fallback")
+                    except Exception as exc:
+                        store.record_tool_run(task_id, "discovery", "lawful_fallback", False, error=str(exc))
+                        deposit(target_url, "poison", str(exc)[:180], strength=0.8)
+                else:
+                    coverage["blocked"].append("fallback")
+                    store.add_event(task_id, "archives", fb["reason"])
 
         if target_url and mode == "deep" and budget.requests < limits["max_requests"]:
             arch = _record(task_id, "archive", url=target_url)
@@ -268,11 +277,18 @@ def run_discovery(
         store.add_event(task_id, "error", str(exc)[:300])
         raise
 
-    if workflow == "discover_then_verify" and store.get_task(task_id)["status"] in {"done", "budget_exhausted"}:
+    from app.research.hooks import after_discovery, after_obstacle, after_verification
+
+    status = (store.get_task(task_id) or {}).get("status")
+    if workflow == "discover_then_verify" and status in {"done", "budget_exhausted"}:
         from app.research.verification import run_verification
 
         store.add_event(task_id, "verify", "Workflow requested verification of the entire collection.")
         run_verification(task_id, scope="entire", level="analyze")
+    elif status in {"error", "budget_exhausted", "cancelled"}:
+        after_obstacle(task_id, status or "obstacle")
+    else:
+        after_discovery(task_id)
     return inbox(task_id)
 
 
@@ -303,6 +319,7 @@ def inbox(task_id: str, query: str = "", source_type: str = "") -> dict[str, Any
                 "entities": len(entities),
                 "unverified": sum(1 for d in documents if d.get("verification_status") == "not_requested"),
             },
+            "mission": {"chips": store.list_chips(task_id)},
         }
     )
 

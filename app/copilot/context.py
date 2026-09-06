@@ -31,7 +31,7 @@ def get_runtime_context() -> dict[str, Any]:
     risk = get_risk_status()
     research_tasks = list_tasks(3)
     last_research = research_tasks[0] if research_tasks else None
-    return {
+    ctx: dict[str, Any] = {
         "version": APP_VERSION,
         "privacy_layer": DEFAULT_PRIVACY_LAYER,
         "country": COMPLIANCE_COUNTRY,
@@ -74,7 +74,21 @@ def get_runtime_context() -> dict[str, Any]:
             "last_query": (last_research or {}).get("query"),
             "cloud_llm": cloud_llm_allowed(),
         },
+        "pheromone_telemetry": None,
     }
+    try:
+        from app.probe.pheromones import telemetry as pheromone_telemetry
+        from app.research.store import list_chips
+
+        ctx["pheromone_telemetry"] = pheromone_telemetry()
+        if last_research:
+            ctx["research"]["chips"] = [
+                {"id": c.get("id"), "label": c.get("label"), "intent": c.get("intent")}
+                for c in list_chips(last_research["id"])[:4]
+            ]
+    except Exception:
+        pass
+    return ctx
 
 
 def context_prompt_block() -> str:

@@ -15,7 +15,7 @@ DATABASE_PATH = Path(os.getenv("DATABASE_PATH", DATA_DIR / "cruel_app.db"))
 PREFERENCES_PATH = Path(os.getenv("PREFERENCES_PATH", DATA_DIR / "preferences.json"))
 
 APP_NAME = os.getenv("APP_NAME", "ArgosScout")
-APP_VERSION = os.getenv("APP_VERSION", "8.2.0")
+APP_VERSION = os.getenv("APP_VERSION", "8.3.0")
 
 SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY", "")
 
@@ -174,7 +174,7 @@ CURL_CFFI_IMPERSONATE = os.getenv("CURL_CFFI_IMPERSONATE", "chrome")
 RESEARCH_LAYERS_ENABLED = os.getenv("RESEARCH_LAYERS_ENABLED", "true").lower() == "true"
 RESEARCH_LOCAL_ONLY = os.getenv("RESEARCH_LOCAL_ONLY", "false").lower() == "true"
 RESEARCH_CLOUD_FALLBACK = os.getenv("RESEARCH_CLOUD_FALLBACK", "false").lower() == "true"
-RESEARCH_EXTRACTOR_VERSION = os.getenv("RESEARCH_EXTRACTOR_VERSION", "") or os.getenv("APP_VERSION", "8.2.0")
+RESEARCH_EXTRACTOR_VERSION = os.getenv("RESEARCH_EXTRACTOR_VERSION", "") or os.getenv("APP_VERSION", "8.3.0")
 
 _log = logging.getLogger("argoscout")
 

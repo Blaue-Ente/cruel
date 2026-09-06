@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from app.auth import require_api_key
 from app.config import COMPLIANCE_COUNTRY, DEFAULT_PRIVACY_LAYER, RESEARCH_LAYERS_ENABLED
-from app.models import ResearchDiscoverRequest, ResearchMergeRequest, ResearchVerifyRequest
+from app.models import PheromoneFlushRequest, ResearchChipRequest, ResearchDiscoverRequest, ResearchMergeRequest, ResearchVerifyRequest
 from app.research.budget import RunCancelled
 from app.research.discovery import LayersDisabled, estimate, inbox, run_discovery
 from app.research.export import export_task, research_diff
+from app.research.graph import get_graph, inspect_element, verify_edge
+from app.research.mission import chips_for_task, execute_chip
+from app.research.snapshots import capture_snapshot, compare_snapshots, list_for_task, wayback_lookback
 from app.research.store import (
     cancel_task,
     erase_task,
@@ -70,7 +74,45 @@ async def api_discover(body: ResearchDiscoverRequest, _key: dict = Depends(requi
 @router.get("/diff")
 async def api_diff(left: str, right: str, _key: dict = Depends(require_api_key)):
     _enabled()
-    return research_diff(left, right)
+    try:
+        return research_diff(left, right)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+
+@router.get("/snapshots/compare")
+async def api_snapshot_compare(left: str, right: str, _key: dict = Depends(require_api_key)):
+    _enabled()
+    try:
+        return compare_snapshots(left, right)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+
+@router.get("/memory/pheromones")
+async def api_pheromone_telemetry(_key: dict = Depends(require_api_key)):
+    _enabled()
+    from app.probe.pheromones import telemetry
+
+    return telemetry()
+
+
+@router.get("/memory/pheromones/map")
+async def api_pheromone_map(_key: dict = Depends(require_api_key)):
+    _enabled()
+    from app.probe.pheromones import pheromone_map
+
+    return pheromone_map()
+
+
+@router.post("/memory/pheromones/flush")
+async def api_pheromone_flush(body: PheromoneFlushRequest, _key: dict = Depends(require_api_key)):
+    _enabled()
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Set confirm=true to flush pheromone routes. Historical savings counters are kept.")
+    from app.probe.pheromones import flush_all
+
+    return flush_all()
 
 
 @router.get("/{task_id}")
@@ -91,6 +133,82 @@ async def api_inbox(task_id: str, q: str = "", source_type: str = "", _key: dict
         raise HTTPException(status_code=404, detail="Research task not found")
 
 
+@router.get("/{task_id}/graph")
+async def api_graph(task_id: str, _key: dict = Depends(require_api_key)):
+    _enabled()
+    try:
+        return get_graph(task_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+
+@router.get("/{task_id}/graph/{element_id}")
+async def api_graph_inspect(task_id: str, element_id: str, _key: dict = Depends(require_api_key)):
+    _enabled()
+    try:
+        return inspect_element(task_id, element_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc) or "Graph element not found")
+
+
+@router.post("/{task_id}/graph/{element_id}/verify")
+async def api_graph_verify(task_id: str, element_id: str, _key: dict = Depends(require_api_key)):
+    _enabled()
+    try:
+        result = await asyncio.to_thread(verify_edge, task_id, element_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc) or "Graph element not found")
+    except RunCancelled:
+        raise HTTPException(status_code=409, detail="Research run was cancelled.")
+    return result
+
+
+@router.get("/{task_id}/chips")
+async def api_chips(task_id: str, _key: dict = Depends(require_api_key)):
+    _enabled()
+    try:
+        return chips_for_task(task_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+
+@router.post("/{task_id}/chips/{chip_id}")
+async def api_chip_execute(task_id: str, chip_id: str, body: ResearchChipRequest, _key: dict = Depends(require_api_key)):
+    _enabled()
+    try:
+        result = await asyncio.to_thread(execute_chip, task_id, chip_id, confirmed=body.confirmed)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc) or "Mission chip not found")
+    return result
+
+
+@router.get("/{task_id}/snapshots")
+async def api_snapshots(task_id: str, _key: dict = Depends(require_api_key)):
+    _enabled()
+    try:
+        return {"snapshots": list_for_task(task_id)}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+
+@router.post("/{task_id}/snapshots")
+async def api_snapshot_capture(task_id: str, _key: dict = Depends(require_api_key)):
+    _enabled()
+    try:
+        return capture_snapshot(task_id, trigger="manual")
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+
+@router.get("/{task_id}/lookback")
+async def api_lookback(task_id: str, url: str = "", _key: dict = Depends(require_api_key)):
+    _enabled()
+    try:
+        return await asyncio.to_thread(wayback_lookback, task_id, url)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+
 @router.get("/{task_id}/report")
 async def api_report(task_id: str, _key: dict = Depends(require_api_key)):
     _enabled()
@@ -101,12 +219,23 @@ async def api_report(task_id: str, _key: dict = Depends(require_api_key)):
 
 
 @router.get("/{task_id}/export")
-async def api_export(task_id: str, _key: dict = Depends(require_api_key)):
+async def api_export(
+    task_id: str,
+    format: str = Query("json", alias="format"),
+    download: bool = False,
+    _key: dict = Depends(require_api_key),
+):
     _enabled()
     try:
-        return export_task(task_id)
+        pack = export_task(task_id, fmt=format)
     except KeyError:
         raise HTTPException(status_code=404, detail="Research task not found")
+    fmt = (format or "json").lower()
+    if download and fmt == "markdown":
+        return PlainTextResponse(pack.get("markdown") or "", media_type="text/markdown")
+    if download and fmt == "html":
+        return HTMLResponse(pack.get("html") or "")
+    return pack
 
 
 @router.post("/{task_id}/verify")

@@ -16,10 +16,12 @@ from app.config import (
     APP_VERSION,
     BASE_DIR,
     COMPLIANCE_COUNTRY,
+    DATA_DIR,
     DEFAULT_PRIVACY_LAYER,
     SCRAPER_API_KEY,
     STOCKARGOS_WEBHOOK_URL,
     admin_secret_is_insecure,
+    is_serverless,
 )
 from app.compliance.policy import PolicyEngine, get_policy_status
 from app.compliance.risk_gate import RiskCapabilityOff, get_status as get_risk_status
@@ -129,8 +131,10 @@ async def lifespan(app: FastAPI):
     init_pheromone_table()
     init_inbox_tables()
     init_stockargos_tables()
-    start_predictive_background()
-    start_inbox_background()
+    # Serverless invocations must not start infinite background loops.
+    if not is_serverless():
+        start_predictive_background()
+        start_inbox_background()
     yield
 
 
@@ -145,7 +149,8 @@ app.include_router(workspace_router)
 app.include_router(research_router)
 
 static_dir = BASE_DIR / "app" / "static"
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+if static_dir.is_dir():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
 @app.exception_handler(UnsafeURLError)
@@ -160,7 +165,10 @@ async def risk_cap_handler(_request, exc: RiskCapabilityOff):
 
 @app.get("/")
 async def root():
-    return FileResponse(static_dir / "index.html")
+    index = static_dir / "index.html"
+    if not index.is_file():
+        return JSONResponse({"app": APP_NAME, "version": APP_VERSION, "error": "UI bundle missing"})
+    return FileResponse(index)
 
 
 @app.get("/health")
@@ -200,6 +208,10 @@ async def health():
             "local_only": RESEARCH_LOCAL_ONLY or LLM_PROVIDER in {"rule", "ollama"},
             "workflows": ["discover_only", "discover_then_verify"],
             "executive_suite": True,
+        },
+        "runtime": {
+            "serverless": is_serverless(),
+            "data_dir": str(DATA_DIR),
         },
     }
 

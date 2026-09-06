@@ -1,6 +1,7 @@
 import logging
 import os
 import secrets
+import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -8,8 +9,40 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
-DATA_DIR.mkdir(exist_ok=True)
+
+def is_serverless() -> bool:
+    """Vercel / Lambda: read-only app dir, ephemeral /tmp, no background loops."""
+    return bool(
+        os.getenv("VERCEL")
+        or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        or os.getenv("LAMBDA_TASK_ROOT")
+    )
+
+
+def ensure_writable_dir(path: Path) -> Path:
+    """Prefer the requested path; fall back to /tmp when the FS is read-only (Vercel)."""
+    path = Path(path)
+    tmp_root = Path(os.getenv("TMPDIR") or os.getenv("TMP") or "/tmp")
+    candidates = [path, tmp_root / "argoscout-data"]
+    seen: set[Path] = set()
+    for candidate in candidates:
+        candidate = candidate.resolve() if candidate.exists() else candidate
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            probe = candidate / ".writeprobe"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+            return candidate
+        except OSError:
+            continue
+    return Path(tempfile.mkdtemp(prefix="argoscout-data-"))
+
+
+_default_data = Path("/tmp/argoscout-data") if is_serverless() else (BASE_DIR / "data")
+DATA_DIR = ensure_writable_dir(Path(os.getenv("DATA_DIR", _default_data)))
 
 DATABASE_PATH = Path(os.getenv("DATABASE_PATH", DATA_DIR / "cruel_app.db"))
 PREFERENCES_PATH = Path(os.getenv("PREFERENCES_PATH", DATA_DIR / "preferences.json"))

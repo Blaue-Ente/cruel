@@ -111,7 +111,11 @@ def init_db() -> None:
 def get_connection():
     conn = sqlite3.connect(DATABASE_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.Error:
+        # Some serverless filesystems reject WAL; DELETE journal still boots.
+        pass
     conn.execute("PRAGMA foreign_keys=ON")
     try:
         yield conn

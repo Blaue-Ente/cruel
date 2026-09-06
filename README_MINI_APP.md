@@ -265,6 +265,18 @@ cp .env.example .env
 python3 run_app.py
 ```
 
+## Deploy
+
+**Railway, Docker, or a VM** is the real host: SQLite persists, predictive/inbox loops run, Playwright can live there.
+
+**Vercel** auto-detects FastAPI at `app/main.py` and runs it as a Function. That is enough for the dashboard and `/health`, with caveats:
+
+- The app filesystem is read-only. Data, SQLite, and the generated admin secret go to `/tmp/argoscout-data` and vanish on cold start.
+- Background predictive and IMAP loops do not start (`VERCEL=1`).
+- Live probe / Playwright browsers are not a fit on the Function.
+
+A previous production crash (`FUNCTION_INVOCATION_FAILED` on `cruel-omega.vercel.app`) was the app calling `mkdir` on `data/` during import. Boot now falls back to `/tmp` instead of dying.
+
 ## Бъдещи интеграции (Argos Ecosystem)
 
 | Проект | ArgosScout роля |

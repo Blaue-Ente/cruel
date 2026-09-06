@@ -4,6 +4,7 @@ from typing import Any, Optional
 
 from app.scraperio import UniversalScraper
 from app.scraperio.models import ScrapingResult
+from app.security.ssrf import ensure_safe_url
 
 
 def universal_scrape(
@@ -15,6 +16,7 @@ def universal_scrape(
     max_items: int = 15,
     production_mode: bool = True,
 ) -> dict[str, Any]:
+    url = ensure_safe_url(url)
     scraper = UniversalScraper(
         team_id=team_id,
         user_id=user_id,

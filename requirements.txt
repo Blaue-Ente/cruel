@@ -33,3 +33,6 @@ playwright>=1.40.0
 
 # Pheromone scale-up (optional — falls back to SQLite)
 redis>=5.0.0
+
+# Tests
+pytest==8.3.4

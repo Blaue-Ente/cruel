@@ -1,10 +1,12 @@
 import hashlib
+import hmac
+import json
 import secrets
 import sqlite3
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from app.config import DATABASE_PATH
 
@@ -70,13 +72,32 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS telemetry_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id TEXT,
+                event_type TEXT NOT NULL,
+                payload TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_scrape_logs_created ON scrape_logs(created_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_telemetry_created ON telemetry_events(created_at)"
+        )
         conn.commit()
 
 
 @contextmanager
 def get_connection():
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(DATABASE_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
     try:
         yield conn
     finally:
@@ -152,6 +173,8 @@ def revoke_api_key(key_id: str) -> bool:
 
 
 def validate_api_key(raw_key: str) -> Optional[dict]:
+    if not raw_key:
+        return None
     key_hash = _hash_key(raw_key)
     with get_connection() as conn:
         row = conn.execute(
@@ -159,11 +182,13 @@ def validate_api_key(raw_key: str) -> Optional[dict]:
             (key_hash,),
         ).fetchone()
 
-        if not row:
+        if not row or not hmac.compare_digest(row["key_hash"], key_hash):
             return None
 
         if row["expires_at"]:
             expires = datetime.fromisoformat(row["expires_at"])
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
             if _utcnow() > expires:
                 return None
 
@@ -278,3 +303,82 @@ def get_predictive_stats() -> dict:
         topics = conn.execute("SELECT COUNT(*) as c FROM context_topics").fetchone()["c"]
         cached = conn.execute("SELECT COUNT(*) as c FROM predictive_cache").fetchone()["c"]
     return {"context_topics": topics, "cached_items": cached}
+
+
+def log_telemetry(event_type: str, payload: Optional[dict[str, Any]] = None, request_id: str = "") -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO telemetry_events (request_id, event_type, payload, created_at) VALUES (?, ?, ?, ?)",
+            (
+                request_id or "",
+                event_type[:80],
+                json.dumps(payload or {}, ensure_ascii=False)[:4000],
+                _utcnow().isoformat(),
+            ),
+        )
+        conn.commit()
+
+
+def get_recent_activity(limit: int = 20) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT url, mode, items_count, success, created_at
+            FROM scrape_logs
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [
+        {
+            "url": row["url"],
+            "mode": row["mode"],
+            "items_count": row["items_count"],
+            "success": bool(row["success"]),
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+def get_mode_stats(limit_hours: int = 24) -> dict[str, Any]:
+    cutoff = (_utcnow() - timedelta(hours=limit_hours)).isoformat()
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT mode,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) AS failures
+            FROM scrape_logs
+            WHERE created_at >= ?
+            GROUP BY mode
+            """,
+            (cutoff,),
+        ).fetchall()
+        recent_failures = conn.execute(
+            """
+            SELECT url, mode, created_at
+            FROM scrape_logs
+            WHERE success = 0 AND created_at >= ?
+            ORDER BY id DESC
+            LIMIT 8
+            """,
+            (cutoff,),
+        ).fetchall()
+    modes = [
+        {
+            "mode": row["mode"],
+            "total": row["total"],
+            "failures": row["failures"] or 0,
+            "failure_rate": round((row["failures"] or 0) / row["total"], 3) if row["total"] else 0,
+        }
+        for row in rows
+    ]
+    return {
+        "window_hours": limit_hours,
+        "modes": modes,
+        "recent_failures": [dict(row) for row in recent_failures],
+        "total": sum(m["total"] for m in modes),
+        "failures": sum(m["failures"] for m in modes),
+    }

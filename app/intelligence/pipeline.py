@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Optional
 
-import requests
-
 from app.api_echo import api_echo
 from app.compliance.policy import PolicyEngine
+from app.http_client import safe_get
 from app.passive.commoncrawl import common_crawl_lookup
+from app.security.ssrf import ensure_safe_url
 from app.seo_autopsy import seo_autopsy
 from app.semantic import semantic_extract
 from app.wayback import temporal_analysis
@@ -28,6 +28,7 @@ async def detective_scrape(
     API Echo → SEO Autopsy → Common Crawl → Wayback → Quick Scrape → Semantic
     """
     policy = PolicyEngine(layer=privacy_layer, country=country, passive_only=passive_only)
+    url = ensure_safe_url(url.strip())
     result: dict[str, Any] = {
         "url": url,
         "goal": goal,
@@ -93,9 +94,7 @@ async def detective_scrape(
 
         elif method in ("quick_scrape", "semantic"):
             try:
-                resp = await asyncio.to_thread(
-                    lambda: requests.get(url, timeout=12, headers={"User-Agent": "ArgosScout/1.0"})
-                )
+                resp = await asyncio.to_thread(lambda: safe_get(url, timeout=12))
                 sem = semantic_extract(resp.text, url)
                 result["findings"]["semantic"] = sem
                 if sem.get("content") and len(sem["content"]) > 100:

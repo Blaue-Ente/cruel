@@ -13,6 +13,7 @@ from app.probe.pheromones import check, get_backend_status, init_pheromone_table
 from app.probe.provocative import provocative_form_probe, provocative_stock_probe
 from app.probe.swarm import swarm_scrape
 from app.probe.temporal import temporal_scrape
+from app.security.ssrf import ensure_safe_url
 from app.vision import vision_scrape
 
 PLAYWRIGHT_AVAILABLE = False
@@ -68,6 +69,7 @@ async def run_active_probe(
     country: Optional[str] = None,
 ) -> dict[str, Any]:
     init_pheromone_table()
+    url = ensure_safe_url(url)
     policy = PolicyEngine(
         layer=privacy_layer or DEFAULT_PRIVACY_LAYER,
         country=country or COMPLIANCE_COUNTRY,

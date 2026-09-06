@@ -6,6 +6,7 @@ from cruel import session as cruel_session
 
 from app.config import SCRAPER_API_KEY
 from app.models import ScrapeRequest, ScrapeResponse
+from app.security.ssrf import ensure_safe_url
 
 
 def _configure_session(country_code: str, device_type: str) -> None:
@@ -74,7 +75,7 @@ def _extract_selectors(soup, selectors: dict[str, str]) -> dict[str, Any]:
 
 
 def scrape_url(request: ScrapeRequest) -> ScrapeResponse:
-    url = str(request.url)
+    url = ensure_safe_url(str(request.url))
     _configure_session(request.country_code, request.device_type)
 
     response = cruel_session.get(url)

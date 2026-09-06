@@ -6,7 +6,7 @@ import base64
 import io
 from typing import Any, Optional
 
-import requests
+from app.http_client import safe_get
 
 from app.config import (
     GROQ_API_KEY,
@@ -108,7 +108,7 @@ def _vision_llm_analyze(image_b64: str, goal: str = "", provider: Optional[str] 
 
 def _html_fallback_analyze(url: str, goal: str = "") -> dict[str, Any]:
     """Fallback when screenshot/vision unavailable — semantic HTML + text LLM."""
-    resp = requests.get(url, timeout=15, headers={"User-Agent": "ArgosScout-Vision/1.0"})
+    resp = safe_get(url, timeout=15)
     sem = semantic_extract(resp.text, url)
     prompt = f"""Analyze this webpage text and extract structured data as JSON.
 URL: {url}

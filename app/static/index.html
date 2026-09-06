@@ -1,33 +1,37 @@
 <!DOCTYPE html>
-<html lang="bg">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ArgosScout — Autonomous Knowledge Agent</title>
+  <title>ArgosScout — Privacy-first research OS</title>
   <link rel="stylesheet" href="/static/dashboard.css" />
 </head>
 <body>
   <aside class="sidebar">
     <div class="brand">
       <h1><span>Argos</span>Scout</h1>
-      <p>Autonomous Knowledge Agent</p>
+      <p id="brand-tag">Ask a question. Get cited, compliant insight.</p>
     </div>
     <nav class="nav">
-      <button class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span>Dashboard</span></button>
+      <div class="nav-group" data-i18n="nav_research">Research</div>
+      <button class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span data-i18n="nav_dashboard">Dashboard</span></button>
       <button class="nav-item" data-page="agent"><span class="nav-icon">🔭</span><span>Argos Agent</span></button>
-      <button class="nav-item" data-page="chat"><span class="nav-icon">🤖</span><span>LLM Чатбот</span></button>
+      <button class="nav-item" data-page="detective"><span class="nav-icon">🕵️</span><span>Smart Detective</span></button>
+      <button class="nav-item" data-page="chat"><span class="nav-icon">🤖</span><span data-i18n="nav_chat">LLM Chat</span></button>
+      <div class="nav-group" data-i18n="nav_extract">Extract</div>
       <button class="nav-item" data-page="quick"><span class="nav-icon">⚡</span><span>Quick Scrape</span></button>
       <button class="nav-item" data-page="universal"><span class="nav-icon">🌐</span><span>Universal Scrape</span></button>
       <button class="nav-item" data-page="vision"><span class="nav-icon">👁</span><span>Vision Scrape</span></button>
       <button class="nav-item" data-page="predictive"><span class="nav-icon">🔮</span><span>Predictive</span></button>
+      <div class="nav-group" data-i18n="nav_intel">Intelligence</div>
+      <button class="nav-item" data-page="compliance"><span class="nav-icon">🛡️</span><span>Privacy Layers</span></button>
       <button class="nav-item" data-page="probe"><span class="nav-icon">🎯</span><span>Active Probe</span></button>
       <button class="nav-item" data-page="tiktok"><span class="nav-icon">🎵</span><span>TikTok Multimodal</span></button>
       <button class="nav-item" data-page="inbox"><span class="nav-icon">📬</span><span>Inbox / Forms</span></button>
       <button class="nav-item" data-page="stockargos"><span class="nav-icon">📈</span><span>StockArgos</span></button>
-      <button class="nav-item" data-page="detective"><span class="nav-icon">🕵️</span><span>Smart Detective</span></button>
-      <button class="nav-item" data-page="compliance"><span class="nav-icon">🛡️</span><span>Privacy Layers</span></button>
-      <button class="nav-item" data-page="keys"><span class="nav-icon">🔑</span><span>API Ключове</span></button>
-      <button class="nav-item" data-page="settings"><span class="nav-icon">⚙️</span><span>Настройки</span></button>
+      <div class="nav-group" data-i18n="nav_system">System</div>
+      <button class="nav-item" data-page="keys"><span class="nav-icon">🔑</span><span data-i18n="nav_keys">API Keys</span></button>
+      <button class="nav-item" data-page="settings"><span class="nav-icon">⚙️</span><span data-i18n="nav_settings">Settings</span></button>
     </nav>
     <div class="sidebar-footer">
       <div id="sidebar-status">Зареждане...</div>
@@ -38,13 +42,34 @@
     <header class="topbar">
       <h2 id="page-title">Dashboard</h2>
       <div class="topbar-actions">
-        <span class="badge badge-green">v6.0</span>
+        <button class="icon-btn" id="btn-palette" title="Command palette">⌘K</button>
+        <button class="icon-btn" id="btn-copilot-toggle" title="Copilot">✦</button>
+        <button class="icon-btn" id="btn-theme" title="Theme">◐</button>
+        <button class="icon-btn" id="btn-locale" title="Language">EN</button>
+        <button class="icon-btn" id="btn-shortcuts" title="Shortcuts">?</button>
+        <span class="badge badge-green">v7.0</span>
       </div>
     </header>
 
     <div class="content">
       <!-- DASHBOARD -->
       <section id="page-dashboard" class="page active">
+        <div class="command-hero">
+          <h3 data-i18n="hero_title">What do you need to know?</h3>
+          <p data-i18n="hero_sub">Research, extract, or scan — Copilot picks the tools. Discoverable in one prompt.</p>
+          <div class="command-hero-row">
+            <input id="hero-input" type="text" placeholder="Find prop trading firms for swing trading… or paste a URL" />
+            <button class="btn btn-primary" id="btn-hero-ask" style="flex:0;min-width:140px">Ask Copilot</button>
+          </div>
+          <div class="hint-row">
+            <span><span class="kbd">Ctrl</span> <span class="kbd">K</span> command palette</span>
+            <span><span class="kbd">Ctrl</span> <span class="kbd">J</span> copilot dock</span>
+            <span class="chip" data-hero="Inspect system health and recommend fixes">Health check</span>
+            <span class="chip" data-hero="Explain the current privacy layer">Privacy layer</span>
+            <span class="chip" data-hero="https://example.com">Extract example.com</span>
+          </div>
+        </div>
+
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-label">Активни API ключове</div>
@@ -84,8 +109,27 @@
         </div>
 
         <div class="alert alert-info" style="margin-top:1.25rem">
-          <strong>ArgosScout</strong> — автономен агент за търсене, scrape, Wayback анализ.
-          Безплатни LLM: <strong>Groq</strong> (най-бърз) → NVIDIA → HuggingFace → Ollama (локален).
+          <strong>ArgosScout v7</strong> — privacy-first research OS. Copilot executes tools (research, scrape, Wayback, GDPR).
+          Free LLMs: <strong>Groq</strong> → NVIDIA → HuggingFace → Ollama.
+        </div>
+
+        <div class="grid-2" style="margin-top:1.25rem">
+          <div class="card">
+            <div class="card-header">Copilot recommendations</div>
+            <div class="card-body">
+              <div id="dash-suggestions" class="suggestion-list">
+                <div class="msg msg-sys">Save an API key in Settings to load live recommendations.</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">Recent activity</div>
+            <div class="card-body">
+              <div id="dash-activity">
+                <div class="msg msg-sys">No jobs yet.</div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -218,8 +262,6 @@
         </div>
       </section>
 
-      </section>
-
       <!-- VISION SCRAPE -->
       <section id="page-vision" class="page">
         <div class="card">
@@ -276,8 +318,6 @@
         </div>
       </section>
 
-      </section>
-
       <!-- ACTIVE PROBE -->
       <section id="page-probe" class="page">
         <div class="card">
@@ -309,7 +349,11 @@
             </div>
             <div class="toggle-row">
               <input type="checkbox" id="probe-dry-run" checked />
-              <label for="probe-dry-run" style="margin:0">Dry run (conversational — не изпраща форми)</label>
+              <label for="probe-dry-run" style="margin:0">Dry run (do not submit live forms)</label>
+            </div>
+            <div class="toggle-row">
+              <input type="checkbox" id="probe-authorized" />
+              <label for="probe-authorized" style="margin:0">I am allowed to test this host (required for live probe)</label>
             </div>
             <div class="toggle-row">
               <input type="checkbox" id="probe-stockargos" />
@@ -523,8 +567,46 @@
               <input type="password" id="set-admin-secret" placeholder="cruel-admin-change-me" />
               <label>API Key (X-API-Key)</label>
               <input type="password" id="set-api-key" placeholder="cruel_..." />
-              <div id="settings-saved" class="alert alert-success hidden">Настройките са запазени локално.</div>
-              <button class="btn btn-primary" id="btn-save-settings">Запази</button>
+              <label>Theme</label>
+              <select id="set-theme">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="system">System</option>
+              </select>
+              <label>Language</label>
+              <select id="set-locale">
+                <option value="auto">Auto</option>
+                <option value="en">English</option>
+                <option value="bg">Български</option>
+              </select>
+              <label>Privacy layer default</label>
+              <select id="set-privacy-layer">
+                <option value="">Server default</option>
+                <option value="ghost">Ghost</option>
+                <option value="standard">Standard</option>
+                <option value="eu_shield">EU Shield</option>
+                <option value="de_fortress">DE Fortress</option>
+                <option value="hunter">Hunter</option>
+              </select>
+              <label>Country (ISO)</label>
+              <input type="text" id="set-country" maxlength="2" placeholder="DE" />
+              <div class="toggle-row">
+                <input type="checkbox" id="set-reduced-motion" />
+                <label for="set-reduced-motion" style="margin:0">Reduced motion</label>
+              </div>
+              <div class="toggle-row">
+                <input type="checkbox" id="set-copilot-dock" checked />
+                <label for="set-copilot-dock" style="margin:0">Open copilot dock by default</label>
+              </div>
+              <div class="row">
+                <button class="btn btn-secondary" id="btn-export-workspace" type="button">Export workspace</button>
+                <label class="btn btn-secondary" style="text-align:center">
+                  Import
+                  <input type="file" id="import-workspace" accept="application/json" class="hidden" />
+                </label>
+              </div>
+              <div id="settings-saved" class="alert alert-success hidden">Saved locally and on the server when an API key is set.</div>
+              <button class="btn btn-primary" id="btn-save-settings" type="button">Save preferences</button>
             </div>
           </div>
           <div class="card">
@@ -561,6 +643,39 @@
           </div>
         </div>
       </section>
+    </div>
+  </div>
+
+  <aside class="copilot-dock" id="copilot-dock" aria-label="Copilot">
+    <div class="copilot-head">
+      <strong>Copilot</strong>
+      <button class="icon-btn" id="btn-copilot-close" type="button">✕</button>
+    </div>
+    <div class="copilot-body">
+      <div id="copilot-messages" class="chat-box" style="height:auto;min-height:220px;margin:0">
+        <div class="msg msg-sys">I run tools: research, scrape, Wayback, SEO, GDPR, health, anomalies. Ask in English or Bulgarian.</div>
+      </div>
+    </div>
+    <div class="copilot-input">
+      <textarea id="copilot-input" placeholder="Ask Copilot to research, extract, or inspect…"></textarea>
+      <button class="btn btn-primary" id="btn-copilot-send" type="button" style="width:100%">Run</button>
+    </div>
+  </aside>
+
+  <div class="overlay" id="palette-overlay">
+    <div class="palette">
+      <input id="palette-input" type="text" placeholder="Jump to a page or run an action…" autocomplete="off" />
+      <div class="palette-list" id="palette-list"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="shortcuts-overlay">
+    <div class="shortcuts-card">
+      <h3>Keyboard shortcuts</h3>
+      <div class="shortcut-row"><span>Command palette</span><span><span class="kbd">Ctrl</span> <span class="kbd">K</span></span></div>
+      <div class="shortcut-row"><span>Toggle copilot</span><span><span class="kbd">Ctrl</span> <span class="kbd">J</span></span></div>
+      <div class="shortcut-row"><span>This cheat sheet</span><span><span class="kbd">?</span></span></div>
+      <div class="shortcut-row"><span>Close overlay</span><span><span class="kbd">Esc</span></span></div>
     </div>
   </div>
 

@@ -14,6 +14,7 @@ from app.config import (
     PREDICTIVE_MAX_TOPICS,
 )
 from app.providers import chat_complete, parse_json_from_text
+from app.http_client import safe_get
 from app.search import search_web
 from app.semantic import semantic_extract
 from app.store import (
@@ -22,8 +23,6 @@ from app.store import (
     save_predictive_cache,
     upsert_context_topic,
 )
-
-import requests
 
 _bg_task: Optional[asyncio.Task] = None
 
@@ -93,9 +92,7 @@ async def run_predictive_cycle(provider: Optional[str] = None) -> dict[str, Any]
                 if not url:
                     continue
                 try:
-                    resp = await asyncio.to_thread(
-                        lambda u=url: requests.get(u, timeout=12, headers={"User-Agent": "ArgosScout-Predictive/1.0"})
-                    )
+                    resp = await asyncio.to_thread(lambda u=url: safe_get(u, timeout=12))
                     sem = semantic_extract(resp.text, url)
                     save_predictive_cache(
                         topic=topic,

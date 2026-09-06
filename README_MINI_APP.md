@@ -1,6 +1,17 @@
-# ArgosScout v6 — Smart Detective + Privacy Layers
+# ArgosScout v7 — Privacy-first Research OS
 
-Еволюция от Cruel Mini App → **ArgosScout** — автономен агент за знание, интегриран с Argos екосистемата.
+Self-hosted research workstation: ask a question, get a **cited, compliance-aware** answer. Copilot executes tools (search, extract, Wayback, GDPR) instead of chatting in circles.
+
+**North star:** time-to-trusted-insight — seconds from a prompt to sources you can defend.
+
+## v7 highlights
+
+- **Command-first UI** — dashboard prompt, `Ctrl+K` palette, `Ctrl+J` copilot dock, themes, EN/BG, workspace export/import
+- **Native copilot** — structured tools: `research`, `scrape`, `wayback`, `seo_autopsy`, `detective`, `gdpr_scan`, `inspect_health`, `spot_anomalies`
+- **Zero-trust outbound fetch** — SSRF guards (private IPs, metadata, credential URLs, redirect re-check)
+- **Rate limits, request IDs, security headers**, WebSocket API key required
+- **Live probe** requires `authorized_target=true` (no silent live fuzzing)
+- **Observability** — activity log, anomaly suggestions, mode failure rates
 
 ## Безплатни AI алтернативи
 
@@ -173,8 +184,14 @@ python3 -m playwright install chromium
 
 | Endpoint | Описание |
 |----------|----------|
+| `POST /api/v1/copilot` | Action copilot (tools + synthesis) |
+| `GET /api/v1/copilot/suggestions` | Proactive optimizations from logs/config |
+| `GET/PUT /api/v1/preferences` | Workspace preferences |
+| `GET /api/v1/workspace/export` | Export preferences JSON |
+| `POST /api/v1/workspace/import` | Import preferences JSON |
+| `GET /api/v1/observability/activity` | Recent jobs |
 | `POST /api/v1/agent/research` | Автономно търсене + синтез |
-| `WS /ws/agent` | Live thought stream |
+| `WS /ws/agent` | Live thought stream (API key required) |
 | `POST /api/v1/wayback` | Wayback temporal анализ |
 | `POST /api/v1/scrape/self-heal` | Self-healing selectors |
 | `POST /api/v1/scrape` | Quick scrape (Cruel) |
@@ -214,7 +231,10 @@ python3 run_app.py
 - [x] Common Crawl passive scraping
 - [x] OSINT Synthesis + Trust Score
 - [x] GDPR Anonymizer gate
-- [ ] Playwright stealth mode for Cloudflare bypass
+- [x] Native action copilot + command-first UI
+- [x] SSRF / rate-limit / request-id / WS auth
+- [x] Workspace preferences export/import
+- [ ] Optional allow-list of scrape hosts for locked-down deployments
 
 ## Лиценз
 

@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
 
+from app.security.ssrf import ensure_safe_url
+
 import requests
 
 
@@ -44,6 +46,7 @@ def get_snapshots(url: str, limit: int = 5) -> list[dict[str, Any]]:
 
 
 def temporal_analysis(url: str) -> dict[str, Any]:
+    url = ensure_safe_url(url)
     snapshots = get_snapshots(url, limit=10)
     if not snapshots:
         return {"url": url, "has_history": False, "note": "No Wayback snapshots found."}

@@ -1,13 +1,19 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+load_dotenv(BASE_DIR / ".env")
+
+DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
 DATA_DIR.mkdir(exist_ok=True)
 
-DATABASE_PATH = DATA_DIR / "cruel_app.db"
+DATABASE_PATH = Path(os.getenv("DATABASE_PATH", DATA_DIR / "cruel_app.db"))
+PREFERENCES_PATH = Path(os.getenv("PREFERENCES_PATH", DATA_DIR / "preferences.json"))
 
 APP_NAME = os.getenv("APP_NAME", "ArgosScout")
+APP_VERSION = os.getenv("APP_VERSION", "7.0.0")
 
 SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY", "")
 
@@ -60,6 +66,7 @@ OLLAMA_MODELS = [
 # Agent limits
 AGENT_MAX_SEARCH_RESULTS = int(os.getenv("AGENT_MAX_SEARCH_RESULTS", "5"))
 AGENT_MAX_SCRAPE_URLS = int(os.getenv("AGENT_MAX_SCRAPE_URLS", "5"))
+COPILOT_MAX_TOOL_ROUNDS = int(os.getenv("COPILOT_MAX_TOOL_ROUNDS", "3"))
 
 # Vision scraping
 VISION_ENABLED = os.getenv("VISION_ENABLED", "true").lower() == "true"
@@ -94,11 +101,29 @@ INBOX_POLL_INTERVAL_SEC = int(os.getenv("INBOX_POLL_INTERVAL_SEC", "120"))
 STOCKARGOS_WEBHOOK_URL = os.getenv("STOCKARGOS_WEBHOOK_URL", "")
 STOCKARGOS_WEBHOOK_SECRET = os.getenv("STOCKARGOS_WEBHOOK_SECRET", "")
 
-# Privacy Layers (Слоеве на поверителност)
-# ghost | standard | eu_shield | de_fortress | hunter
+# Privacy Layers
 DEFAULT_PRIVACY_LAYER = os.getenv("DEFAULT_PRIVACY_LAYER", "standard").lower()
-COMPLIANCE_COUNTRY = os.getenv("COMPLIANCE_COUNTRY", "").upper()  # DE, BG, US — auto-resolves layer
+COMPLIANCE_COUNTRY = os.getenv("COMPLIANCE_COUNTRY", "").upper()
 
-ADMIN_SECRET = os.getenv("ADMIN_SECRET", "cruel-admin-change-me")
+DEFAULT_ADMIN_SECRET = "cruel-admin-change-me"
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", DEFAULT_ADMIN_SECRET)
+ALLOW_INSECURE_DEFAULTS = os.getenv("ALLOW_INSECURE_DEFAULTS", "true").lower() == "true"
+
 APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("APP_PORT", "8000"))
+
+USER_AGENT = os.getenv("USER_AGENT", f"ArgosScout/{APP_VERSION}")
+
+# Zero-trust outbound fetch
+SSRF_ALLOW_PRIVATE = os.getenv("SSRF_ALLOW_PRIVATE", "false").lower() == "true"
+SSRF_DNS_TIMEOUT_SEC = float(os.getenv("SSRF_DNS_TIMEOUT_SEC", "3"))
+
+# Rate limits (sliding window)
+RATE_LIMIT_WINDOW_SEC = int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60"))
+RATE_LIMIT_ANONYMOUS = int(os.getenv("RATE_LIMIT_ANONYMOUS", "30"))
+RATE_LIMIT_AUTHENTICATED = int(os.getenv("RATE_LIMIT_AUTHENTICATED", "120"))
+RATE_LIMIT_ADMIN = int(os.getenv("RATE_LIMIT_ADMIN", "60"))
+
+
+def admin_secret_is_insecure() -> bool:
+    return not ADMIN_SECRET or ADMIN_SECRET == DEFAULT_ADMIN_SECRET

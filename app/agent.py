@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any, AsyncGenerator, Callable, Optional
 
-import requests
-
 from app.config import AGENT_MAX_SCRAPE_URLS, AGENT_MAX_SEARCH_RESULTS, COMPLIANCE_COUNTRY, DEFAULT_PRIVACY_LAYER
+from app.http_client import safe_get
 from app.compliance.policy import PolicyEngine
 from app.intelligence.pipeline import detective_scrape
 from app.providers import chat_complete, chat_stream
@@ -132,9 +131,7 @@ async def run_agent(
                 text = "\n".join(item.get("content", "")[:1500] for item in items[:2])
                 title = items[0].get("title", "") if items else url
             elif not text:
-                resp = await asyncio.to_thread(
-                    lambda u=url: requests.get(u, timeout=12, headers={"User-Agent": "ArgosScout/1.0"})
-                )
+                resp = await asyncio.to_thread(lambda u=url: safe_get(u, timeout=12))
                 sem = semantic_extract(resp.text, url)
                 text = sem["content"]
                 title = sem["title"]

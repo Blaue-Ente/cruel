@@ -40,7 +40,7 @@ Categories: """ + json.dumps({k: [s["name"] for s in v] for k, v in SITE_CATALOG
 def _call_llm_parse(message: str, provider: Optional[str], model: Optional[str]) -> Optional[LLMCommandJSON]:
     raw = chat_complete(
         [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": message}],
-        provider=provider, model=model, max_tokens=900,
+        provider=provider, model=model, max_tokens=900, task="route",
     )
     if raw:
         parsed = parse_json_from_text(raw)

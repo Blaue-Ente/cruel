@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 
@@ -9,7 +10,17 @@ from fastapi.staticfiles import StaticFiles
 
 from app.agent import run_agent, stream_agent_thoughts
 from app.auth import require_admin, require_api_key
-from app.config import APP_NAME, BASE_DIR, COMPLIANCE_COUNTRY, DEFAULT_PRIVACY_LAYER, SCRAPER_API_KEY, STOCKARGOS_WEBHOOK_URL
+from app.config import (
+    ADMIN_SECRET_SOURCE,
+    APP_NAME,
+    APP_VERSION,
+    BASE_DIR,
+    COMPLIANCE_COUNTRY,
+    DEFAULT_PRIVACY_LAYER,
+    SCRAPER_API_KEY,
+    STOCKARGOS_WEBHOOK_URL,
+    admin_secret_is_insecure,
+)
 from app.compliance.policy import PolicyEngine, get_policy_status
 from app.compliance.gdpr_gate import apply_gdpr_gate, scan_for_pii
 from app.compliance.layers import list_layers, resolve_layer
@@ -57,6 +68,9 @@ from app.models import (
     CommonCrawlRequest,
     OsintInvestigateRequest,
     GdprScanRequest,
+    ApexRequest,
+    CorporateIntelRequest,
+    LawfulFallbackRequest,
     DashboardStats,
     LLMCommandJSON,
     ScrapeRequest,
@@ -85,8 +99,13 @@ from app.universal_scraper import (
     universal_scrape_batch,
 )
 from app.wayback import temporal_analysis
+from app.http_client import safe_get
+from app.routers.workspace import router as workspace_router
+from app.security.middleware import install_security_middleware
+from app.security.ssrf import UnsafeURLError
 
-import requests
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
 
 @asynccontextmanager
@@ -102,13 +121,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=APP_NAME,
-    description="ArgosScout — Autonomous Knowledge Agent + Active Probe",
-    version="6.0.0",
+    description="ArgosScout — autonomous OSINT research OS with BYOK copilot",
+    version=APP_VERSION,
     lifespan=lifespan,
 )
+install_security_middleware(app)
+app.include_router(workspace_router)
 
 static_dir = BASE_DIR / "app" / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+
+@app.exception_handler(UnsafeURLError)
+async def unsafe_url_handler(_request, exc: UnsafeURLError):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 @app.get("/")
@@ -121,7 +147,7 @@ async def health():
     return {
         "status": "ok",
         "app": APP_NAME,
-        "version": "6.0.0",
+        "version": APP_VERSION,
         "scraper_api_configured": bool(SCRAPER_API_KEY),
         "llm": get_llm_status(),
         "scraperio": get_scraper_capabilities(),
@@ -134,6 +160,13 @@ async def health():
             "webhook_configured": bool(STOCKARGOS_WEBHOOK_URL),
         },
         "privacy_layers": get_policy_status(DEFAULT_PRIVACY_LAYER, COMPLIANCE_COUNTRY),
+        "security": {
+            "ssrf_protection": True,
+            "rate_limiting": True,
+            "admin_secret_insecure": admin_secret_is_insecure(),
+            "admin_secret_source": ADMIN_SECRET_SOURCE,
+            "websocket_requires_api_key": True,
+        },
     }
 
 
@@ -220,9 +253,11 @@ async def scrape_capabilities():
 @app.post("/api/v1/scrape/self-heal")
 async def api_self_heal(body: SelfHealRequest, _key: dict = Depends(require_api_key)):
     try:
-        resp = requests.get(str(body.url), timeout=15, headers={"User-Agent": "ArgosScout/1.0"})
+        resp = safe_get(str(body.url), timeout=15)
         result = extract_with_healing(resp.text, body.selectors, str(body.url))
         return {"url": str(body.url), "extracted": result, "status_code": resp.status_code}
+    except UnsafeURLError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -278,6 +313,11 @@ async def api_predictive_stats(_key: dict = Depends(require_api_key)):
 
 @app.post("/api/v1/probe/run")
 async def api_active_probe(body: ProbeRequest, _key: dict = Depends(require_api_key)):
+    if not body.dry_run and not body.authorized_target:
+        raise HTTPException(
+            status_code=400,
+            detail="Live probe requires authorized_target=true — confirm you may test this host.",
+        )
     try:
         result = await run_active_probe(
             str(body.url),
@@ -294,6 +334,8 @@ async def api_active_probe(body: ProbeRequest, _key: dict = Depends(require_api_
         )
         log_scrape(str(body.url), "probe", items_count=len(body.modes))
         return result
+    except UnsafeURLError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Active probe failed: {e}")
 
@@ -456,6 +498,60 @@ async def api_osint_investigate(body: OsintInvestigateRequest, _key: dict = Depe
         raise HTTPException(status_code=502, detail=f"OSINT investigation failed: {e}")
 
 
+@app.post("/api/v1/osint/corporate")
+async def api_osint_corporate(body: CorporateIntelRequest, _key: dict = Depends(require_api_key)):
+    from app.osint.corporate import corporate_intel
+
+    result = await asyncio.to_thread(corporate_intel, body.name, body.url, body.country)
+    log_scrape(body.name or body.url, "corporate", items_count=1, success=result.get("success", False))
+    return result
+
+
+@app.get("/api/v1/osint/graph")
+async def api_osint_graph(_key: dict = Depends(require_api_key)):
+    from app.osint.graph import snapshot
+
+    return snapshot()
+
+
+@app.post("/api/v1/recon/fallback")
+async def api_recon_fallback(body: LawfulFallbackRequest, _key: dict = Depends(require_api_key)):
+    from app.recon.fallback import lawful_fallback
+
+    result = await asyncio.to_thread(lawful_fallback, str(body.url))
+    log_scrape(str(body.url), "fallback", items_count=len(result.get("methods") or []), success=result.get("success", False))
+    return result
+
+
+@app.post("/api/v1/apex/run")
+async def api_apex_run(body: ApexRequest, _key: dict = Depends(require_api_key)):
+    from app.apex.orchestrator import run_apex
+
+    result = await asyncio.to_thread(
+        run_apex,
+        body.target,
+        privacy_layer=body.privacy_layer or DEFAULT_PRIVACY_LAYER,
+        country=body.country or COMPLIANCE_COUNTRY,
+        provider=body.llm_provider,
+        include_people=body.include_people,
+        include_corporate=body.include_corporate,
+        include_archives=body.include_archives,
+        include_live_probe=body.include_live_probe,
+    )
+    log_scrape(body.target[:100], "apex", items_count=len(result.get("citations") or []), success=result.get("success", False))
+    return result
+
+
+@app.get("/api/v1/apex/last")
+async def api_apex_last(_key: dict = Depends(require_api_key)):
+    from app.apex.orchestrator import last_apex
+
+    data = last_apex()
+    if not data:
+        raise HTTPException(status_code=404, detail="No Apex dossier yet")
+    return data
+
+
 # --- ArgosScout Agent ---
 
 
@@ -490,9 +586,9 @@ async def ws_agent(websocket: WebSocket):
         raw = await websocket.receive_text()
         payload = json.loads(raw)
         api_key = payload.get("api_key", "")
-        if api_key and not validate_api_key(api_key):
-            await websocket.send_json({"type": "error", "text": "Invalid API key"})
-            await websocket.close()
+        if not api_key or not validate_api_key(api_key):
+            await websocket.send_json({"type": "error", "text": "Valid API key required"})
+            await websocket.close(code=4401)
             return
 
         goal = payload.get("goal", payload.get("message", ""))

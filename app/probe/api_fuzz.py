@@ -7,8 +7,7 @@ import re
 from typing import Any, Optional
 from urllib.parse import urljoin, urlparse
 
-import requests
-
+from app.http_client import safe_get
 from app.probe.pheromones import deposit
 from app.providers import chat_complete, parse_json_from_text
 
@@ -68,7 +67,7 @@ def api_fuzz(url: str, max_probes: int = 15, provider: Optional[str] = None) -> 
     origin = f"{parsed.scheme}://{parsed.netloc}"
 
     try:
-        resp = requests.get(url, timeout=15, headers={"User-Agent": "ArgosScout-Probe/1.0"})
+        resp = safe_get(url, timeout=15)
         html = resp.text
     except Exception as e:
         return {"url": url, "success": False, "error": str(e)}
@@ -84,7 +83,7 @@ def api_fuzz(url: str, max_probes: int = 15, provider: Optional[str] = None) -> 
         if urlparse(full).netloc != parsed.netloc:
             continue
         try:
-            r = requests.get(full, timeout=8, headers={"User-Agent": "ArgosScout-Probe/1.0"}, allow_redirects=False)
+            r = safe_get(full, timeout=8, allow_redirects=False)
             entry = {
                 "url": full,
                 "status": r.status_code,

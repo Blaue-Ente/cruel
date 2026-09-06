@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Optional
 
-import requests
-
 from app.api_echo import api_echo
 from app.compliance.policy import PolicyEngine
+from app.http_client import safe_get
 from app.passive.commoncrawl import common_crawl_lookup
+from app.security.ssrf import ensure_safe_url
 from app.seo_autopsy import seo_autopsy
 from app.semantic import semantic_extract
 from app.wayback import temporal_analysis
@@ -28,6 +28,7 @@ async def detective_scrape(
     API Echo → SEO Autopsy → Common Crawl → Wayback → Quick Scrape → Semantic
     """
     policy = PolicyEngine(layer=privacy_layer, country=country, passive_only=passive_only)
+    url = ensure_safe_url(url.strip())
     result: dict[str, Any] = {
         "url": url,
         "goal": goal,
@@ -93,9 +94,7 @@ async def detective_scrape(
 
         elif method in ("quick_scrape", "semantic"):
             try:
-                resp = await asyncio.to_thread(
-                    lambda: requests.get(url, timeout=12, headers={"User-Agent": "ArgosScout/1.0"})
-                )
+                resp = await asyncio.to_thread(lambda: safe_get(url, timeout=12))
                 sem = semantic_extract(resp.text, url)
                 result["findings"]["semantic"] = sem
                 if sem.get("content") and len(sem["content"]) > 100:
@@ -105,6 +104,20 @@ async def detective_scrape(
                     break
             except Exception as e:
                 result["findings"]["semantic"] = {"error": str(e)}
+
+    if not result.get("success"):
+        result["methods_tried"].append("lawful_fallback")
+        try:
+            from app.recon.fallback import lawful_fallback
+
+            fallback = await asyncio.to_thread(lawful_fallback, url)
+            result["findings"]["lawful_fallback"] = fallback
+            if fallback.get("success"):
+                result["success"] = True
+                result["winning_method"] = f"fallback:{fallback.get('winning_method')}"
+                result["message"] = fallback.get("message") or result["message"]
+        except Exception as e:
+            result["findings"]["lawful_fallback"] = {"error": str(e)}
 
     if not result.get("message"):
         result["message"] = (

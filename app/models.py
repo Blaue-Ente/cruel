@@ -152,6 +152,10 @@ class ProbeRequest(BaseModel):
     goal: str = ""
     urls: Optional[list[str]] = None
     dry_run: bool = True
+    authorized_target: bool = Field(
+        default=False,
+        description="Must be true to run a live (non dry-run) probe against a host you are allowed to test.",
+    )
     temporal_offset_days: int = 1
     swarm_workers: int = Field(default=5, ge=1, le=10)
     llm_provider: Optional[str] = None
@@ -209,10 +213,67 @@ class OsintInvestigateRequest(BaseModel):
     llm_provider: Optional[str] = None
 
 
+class ApexRequest(BaseModel):
+    target: str = Field(..., min_length=2, max_length=500)
+    privacy_layer: Optional[str] = None
+    country: Optional[str] = None
+    llm_provider: Optional[str] = None
+    include_people: bool = True
+    include_corporate: bool = True
+    include_archives: bool = True
+    include_live_probe: bool = False
+
+
+class CorporateIntelRequest(BaseModel):
+    name: str = ""
+    url: str = ""
+    country: str = ""
+
+
+class LawfulFallbackRequest(BaseModel):
+    url: HttpUrl
+
+
 class GdprScanRequest(BaseModel):
     text: str
     privacy_layer: Optional[str] = None
     country: Optional[str] = None
+
+
+class CopilotRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=8000)
+    execute: bool = True
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    privacy_layer: Optional[str] = None
+    country: Optional[str] = None
+
+
+class CopilotResponse(BaseModel):
+    reply: str
+    steps: list[dict[str, Any]] = Field(default_factory=list)
+    tools: list[dict[str, Any]] = Field(default_factory=list)
+    privacy_layer: str = ""
+    executed: bool = True
+
+
+class PreferencesUpdate(BaseModel):
+    theme: Optional[str] = None
+    locale: Optional[str] = None
+    privacy_layer: Optional[str] = None
+    country: Optional[str] = None
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    reduced_motion: Optional[bool] = None
+    copilot_dock_open: Optional[bool] = None
+    keyboard_shortcuts: Optional[bool] = None
+    dashboard_widgets: Optional[list[str]] = None
+
+
+class WorkspaceImport(BaseModel):
+    format: Optional[str] = None
+    version: Optional[int] = None
+    preferences: dict[str, Any] = Field(default_factory=dict)
 
 
 class ChatResponse(BaseModel):

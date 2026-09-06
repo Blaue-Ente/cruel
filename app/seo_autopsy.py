@@ -7,7 +7,7 @@ import re
 from typing import Any, Optional
 from urllib.parse import urljoin, urlparse
 
-import requests
+from app.http_client import safe_get
 from bs4 import BeautifulSoup
 
 
@@ -26,7 +26,7 @@ def seo_autopsy(url: str, fetch_sitemap: bool = True) -> dict[str, Any]:
     }
 
     try:
-        r = requests.get(url, timeout=15, headers={"User-Agent": "ArgosScout/1.0 (SEO-Autopsy)"})
+        r = safe_get(url, timeout=15)
         html = r.text
         soup = BeautifulSoup(html, "html.parser")
     except Exception as e:
@@ -195,7 +195,7 @@ def _fetch_sitemap(url: str) -> Optional[dict]:
     for path in ("/sitemap.xml", "/sitemap_index.xml", "/sitemap-index.xml"):
         try:
             sm_url = urljoin(base, path)
-            r = requests.get(sm_url, timeout=10, headers={"User-Agent": "ArgosScout/1.0"})
+            r = safe_get(sm_url, timeout=10)
             if r.status_code != 200 or "<" not in r.text:
                 continue
             urls = re.findall(r"<loc>([^<]+)</loc>", r.text)[:50]

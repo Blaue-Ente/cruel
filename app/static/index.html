@@ -1,33 +1,38 @@
 <!DOCTYPE html>
-<html lang="bg">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ArgosScout — Autonomous Knowledge Agent</title>
+  <title>ArgosScout — Privacy-first research OS</title>
   <link rel="stylesheet" href="/static/dashboard.css" />
 </head>
 <body>
   <aside class="sidebar">
     <div class="brand">
       <h1><span>Argos</span>Scout</h1>
-      <p>Autonomous Knowledge Agent</p>
+      <p id="brand-tag">Ask a question. Get a cited OSINT dossier.</p>
     </div>
     <nav class="nav">
-      <button class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span>Dashboard</span></button>
+      <div class="nav-group" data-i18n="nav_research">Research</div>
+      <button class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span data-i18n="nav_dashboard">Dashboard</span></button>
       <button class="nav-item" data-page="agent"><span class="nav-icon">🔭</span><span>Argos Agent</span></button>
-      <button class="nav-item" data-page="chat"><span class="nav-icon">🤖</span><span>LLM Чатбот</span></button>
+      <button class="nav-item" data-page="apex"><span class="nav-icon">♛</span><span>Apex Master</span></button>
+      <button class="nav-item" data-page="detective"><span class="nav-icon">🕵️</span><span>Smart Detective</span></button>
+      <button class="nav-item" data-page="chat"><span class="nav-icon">🤖</span><span data-i18n="nav_chat">LLM Chat</span></button>
+      <div class="nav-group" data-i18n="nav_extract">Extract</div>
       <button class="nav-item" data-page="quick"><span class="nav-icon">⚡</span><span>Quick Scrape</span></button>
       <button class="nav-item" data-page="universal"><span class="nav-icon">🌐</span><span>Universal Scrape</span></button>
       <button class="nav-item" data-page="vision"><span class="nav-icon">👁</span><span>Vision Scrape</span></button>
       <button class="nav-item" data-page="predictive"><span class="nav-icon">🔮</span><span>Predictive</span></button>
+      <div class="nav-group" data-i18n="nav_intel">Intelligence</div>
+      <button class="nav-item" data-page="compliance"><span class="nav-icon">🛡️</span><span>Privacy Layers</span></button>
       <button class="nav-item" data-page="probe"><span class="nav-icon">🎯</span><span>Active Probe</span></button>
       <button class="nav-item" data-page="tiktok"><span class="nav-icon">🎵</span><span>TikTok Multimodal</span></button>
       <button class="nav-item" data-page="inbox"><span class="nav-icon">📬</span><span>Inbox / Forms</span></button>
       <button class="nav-item" data-page="stockargos"><span class="nav-icon">📈</span><span>StockArgos</span></button>
-      <button class="nav-item" data-page="detective"><span class="nav-icon">🕵️</span><span>Smart Detective</span></button>
-      <button class="nav-item" data-page="compliance"><span class="nav-icon">🛡️</span><span>Privacy Layers</span></button>
-      <button class="nav-item" data-page="keys"><span class="nav-icon">🔑</span><span>API Ключове</span></button>
-      <button class="nav-item" data-page="settings"><span class="nav-icon">⚙️</span><span>Настройки</span></button>
+      <div class="nav-group" data-i18n="nav_system">System</div>
+      <button class="nav-item" data-page="keys"><span class="nav-icon">🔑</span><span data-i18n="nav_keys">API Keys</span></button>
+      <button class="nav-item" data-page="settings"><span class="nav-icon">⚙️</span><span data-i18n="nav_settings">Settings</span></button>
     </nav>
     <div class="sidebar-footer">
       <div id="sidebar-status">Зареждане...</div>
@@ -38,13 +43,35 @@
     <header class="topbar">
       <h2 id="page-title">Dashboard</h2>
       <div class="topbar-actions">
-        <span class="badge badge-green">v6.0</span>
+        <button class="icon-btn" id="btn-palette" title="Command palette">⌘K</button>
+        <button class="icon-btn" id="btn-copilot-toggle" title="Copilot">✦</button>
+        <button class="icon-btn" id="btn-theme" title="Theme">◐</button>
+        <button class="icon-btn" id="btn-locale" title="Language">EN</button>
+        <button class="icon-btn" id="btn-playbook" title="Feature Inspector">📘</button>
+        <button class="icon-btn" id="btn-shortcuts" title="Shortcuts">?</button>
+        <span class="badge badge-green">v8.0</span>
       </div>
     </header>
 
     <div class="content">
       <!-- DASHBOARD -->
       <section id="page-dashboard" class="page active">
+        <div class="command-hero">
+          <h3 data-i18n="hero_title">What do you need to know?</h3>
+          <p data-i18n="hero_sub">Research, extract, or scan — Copilot picks the tools. Discoverable in one prompt.</p>
+          <div class="command-hero-row">
+            <input id="hero-input" type="text" placeholder="Find prop trading firms for swing trading… or paste a URL" />
+            <button class="btn btn-primary" id="btn-hero-ask" style="flex:0;min-width:140px">Ask Copilot</button>
+          </div>
+          <div class="hint-row">
+            <span><span class="kbd">Ctrl</span> <span class="kbd">K</span> command palette</span>
+            <span><span class="kbd">Ctrl</span> <span class="kbd">J</span> copilot dock</span>
+            <span class="chip" data-hero="Inspect system health and recommend fixes">Health check</span>
+            <span class="chip" data-hero="Apex dossier for example.com and its C-suite">Apex dossier</span>
+            <span class="chip" data-hero="Explain the current privacy layer">Privacy layer</span>
+          </div>
+        </div>
+
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-label">Активни API ключове</div>
@@ -70,22 +97,52 @@
 
         <div class="grid-2">
           <div class="card">
-            <div class="card-header">Scraper.io Capabilities</div>
+            <div class="card-header">Extraction strategies</div>
             <div class="card-body">
-              <pre id="dash-capabilities" class="json-view">Loading...</pre>
+              <div id="dash-strategies" class="chip-row">Loading…</div>
+              <table class="intel-table" id="dash-strategy-table">
+                <thead><tr><th>Strategy</th><th>Role</th></tr></thead>
+                <tbody></tbody>
+              </table>
             </div>
           </div>
           <div class="card">
-            <div class="card-header">LLM Status (NVIDIA / HuggingFace)</div>
+            <div class="card-header">BYOK LLM hub</div>
             <div class="card-body">
-              <pre id="dash-llm" class="json-view">Loading...</pre>
+              <div class="rings-row">
+                <div class="status-ring" id="ring-llm" data-state="warn"><span>LLM</span></div>
+                <div class="status-ring" id="ring-sec" data-state="ok"><span>SEC</span></div>
+                <div class="status-ring" id="ring-byok" data-state="warn"><span>BYOK</span></div>
+              </div>
+              <div id="dash-providers" class="pill-row"></div>
+              <div class="muted-sm" id="dash-routing">Routing: —</div>
             </div>
           </div>
         </div>
 
         <div class="alert alert-info" style="margin-top:1.25rem">
-          <strong>ArgosScout</strong> — автономен агент за търсене, scrape, Wayback анализ.
-          Безплатни LLM: <strong>Groq</strong> (най-бърз) → NVIDIA → HuggingFace → Ollama (локален).
+          <strong>ArgosScout v8 Apex</strong> — BYOK (OpenRouter / OpenAI / Anthropic / Groq / Ollama).
+          Lawful fallback when live DOM is blocked. Apex Master Mode builds a cited dossier.
+          No TLS/canvas spoofing, no LinkedIn scrape.
+        </div>
+
+        <div class="grid-2" style="margin-top:1.25rem">
+          <div class="card">
+            <div class="card-header">Copilot recommendations</div>
+            <div class="card-body">
+              <div id="dash-suggestions" class="suggestion-list">
+                <div class="msg msg-sys">Save an API key in Settings to load live recommendations.</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">Recent activity</div>
+            <div class="card-body">
+              <div id="dash-activity">
+                <div class="msg msg-sys">No jobs yet.</div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -121,6 +178,47 @@
                 <div class="msg msg-sys">Thought process ще се появи тук в реално време...</div>
               </div>
               <pre id="agent-result" class="json-view" style="max-height:200px">// Synthesis result</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- APEX MASTER -->
+      <section id="page-apex" class="page">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">♛ Apex Master Mode</div>
+            <div class="card-body">
+              <p class="muted-sm" style="margin-bottom:1rem">
+                One target. Planner decomposes it into registries, lawful fallback, people footprint, and archives.
+                Live Active Probe is never launched from here.
+              </p>
+              <div class="chips">
+                <span class="chip" data-apex="Company X and its C-suite">C-suite pack</span>
+                <span class="chip" data-apex="https://example.com public footprint">Domain footprint</span>
+                <span class="chip" data-apex="OpenAI corporate registry and hiring signals">Corporate</span>
+              </div>
+              <label>Target</label>
+              <textarea id="apex-target" placeholder="e.g. Acme GmbH and its C-suite"></textarea>
+              <div class="toggle-row">
+                <input type="checkbox" id="apex-people" checked />
+                <label for="apex-people" style="margin:0">People footprint</label>
+              </div>
+              <div class="toggle-row">
+                <input type="checkbox" id="apex-corporate" checked />
+                <label for="apex-corporate" style="margin:0">Registries + stack</label>
+              </div>
+              <div class="toggle-row">
+                <input type="checkbox" id="apex-archives" checked />
+                <label for="apex-archives" style="margin:0">Archives + fallback</label>
+              </div>
+              <button class="btn btn-primary" id="btn-apex-run">Build dossier</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">Dossier</div>
+            <div class="card-body" id="apex-dossier">
+              <div class="msg msg-sys">Run Apex to produce a cited intelligence pack.</div>
             </div>
           </div>
         </div>
@@ -218,8 +316,6 @@
         </div>
       </section>
 
-      </section>
-
       <!-- VISION SCRAPE -->
       <section id="page-vision" class="page">
         <div class="card">
@@ -276,8 +372,6 @@
         </div>
       </section>
 
-      </section>
-
       <!-- ACTIVE PROBE -->
       <section id="page-probe" class="page">
         <div class="card">
@@ -309,7 +403,11 @@
             </div>
             <div class="toggle-row">
               <input type="checkbox" id="probe-dry-run" checked />
-              <label for="probe-dry-run" style="margin:0">Dry run (conversational — не изпраща форми)</label>
+              <label for="probe-dry-run" style="margin:0">Dry run (do not submit live forms)</label>
+            </div>
+            <div class="toggle-row">
+              <input type="checkbox" id="probe-authorized" />
+              <label for="probe-authorized" style="margin:0">I am allowed to test this host (required for live probe)</label>
             </div>
             <div class="toggle-row">
               <input type="checkbox" id="probe-stockargos" />
@@ -520,47 +618,137 @@
             <div class="card-header">Автентикация</div>
             <div class="card-body">
               <label>Admin Secret (X-Admin-Secret)</label>
-              <input type="password" id="set-admin-secret" placeholder="cruel-admin-change-me" />
+              <input type="password" id="set-admin-secret" placeholder="paste from data/.admin_secret" />
+              <div id="admin-secret-hint" class="alert alert-info hidden" style="margin:.5rem 0">
+                A generated admin secret lives in <code>data/.admin_secret</code>. Paste it here — the shipped default is rejected.
+              </div>
               <label>API Key (X-API-Key)</label>
               <input type="password" id="set-api-key" placeholder="cruel_..." />
-              <div id="settings-saved" class="alert alert-success hidden">Настройките са запазени локално.</div>
-              <button class="btn btn-primary" id="btn-save-settings">Запази</button>
+              <label>Theme</label>
+              <select id="set-theme">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="system">System</option>
+              </select>
+              <label>Language</label>
+              <select id="set-locale">
+                <option value="auto">Auto</option>
+                <option value="en">English</option>
+                <option value="bg">Български</option>
+              </select>
+              <label>Privacy layer default</label>
+              <select id="set-privacy-layer">
+                <option value="">Server default</option>
+                <option value="ghost">Ghost</option>
+                <option value="standard">Standard</option>
+                <option value="eu_shield">EU Shield</option>
+                <option value="de_fortress">DE Fortress</option>
+                <option value="hunter">Hunter</option>
+              </select>
+              <label>Country (ISO)</label>
+              <input type="text" id="set-country" maxlength="2" placeholder="DE" />
+              <div class="toggle-row">
+                <input type="checkbox" id="set-reduced-motion" />
+                <label for="set-reduced-motion" style="margin:0">Reduced motion</label>
+              </div>
+              <div class="toggle-row">
+                <input type="checkbox" id="set-copilot-dock" checked />
+                <label for="set-copilot-dock" style="margin:0">Open copilot dock by default</label>
+              </div>
+              <div class="row">
+                <button class="btn btn-secondary" id="btn-export-workspace" type="button">Export workspace</button>
+                <label class="btn btn-secondary" style="text-align:center">
+                  Import
+                  <input type="file" id="import-workspace" accept="application/json" class="hidden" />
+                </label>
+              </div>
+              <div id="settings-saved" class="alert alert-success hidden">Saved locally and on the server when an API key is set.</div>
+              <button class="btn btn-primary" id="btn-save-settings" type="button">Save preferences</button>
             </div>
           </div>
           <div class="card">
             <div class="card-header">LLM Provider</div>
             <div class="card-body">
               <div class="provider-card active">
-                <div class="provider-title">Groq (препоръчано — 800+ tok/s)</div>
-                <div class="provider-desc">Безплатен на console.groq.com · Най-бърз LLM</div>
+                <div class="provider-title">OpenRouter (BYOK — Claude, DeepSeek, Llama, Gemini)</div>
+                <div class="provider-desc">One key at openrouter.ai · reasoning + light routing</div>
               </div>
               <div class="provider-card">
-                <div class="provider-title">NVIDIA NIM</div>
-                <div class="provider-desc">Безплатни модели на build.nvidia.com</div>
+                <div class="provider-title">Groq (fastest free tier)</div>
+                <div class="provider-desc">console.groq.com · light tasks</div>
               </div>
               <div class="provider-card">
-                <div class="provider-title">Ollama (локален SLM)</div>
-                <div class="provider-desc">Безплатен локален модел · ollama.com</div>
+                <div class="provider-title">Anthropic / OpenAI / Ollama</div>
+                <div class="provider-desc">Native Claude, GPT-4o, or local models</div>
               </div>
               <label>Provider</label>
               <select id="set-llm-provider">
-                <option value="auto">Auto (Groq → NVIDIA → HF → Ollama)</option>
-                <option value="groq">Groq (най-бърз)</option>
+                <option value="auto">Auto (task routing)</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="groq">Groq</option>
                 <option value="nvidia">NVIDIA NIM</option>
                 <option value="huggingface">Hugging Face</option>
-                <option value="ollama">Ollama (локален)</option>
-                <option value="rule">Rule-based (без LLM)</option>
+                <option value="ollama">Ollama (local)</option>
+                <option value="rule">Rule-based (no LLM)</option>
               </select>
               <label>Модел</label>
               <select id="set-llm-model"></select>
               <div class="alert alert-info" style="margin-top:.5rem">
-                NVIDIA: <code>NVIDIA_API_KEY</code> · Groq: <code>GROQ_API_KEY</code> ·
-                HF: <code>HF_TOKEN</code> · Ollama: локално на :11434
+                OpenRouter: <code>OPENROUTER_API_KEY</code> · OpenAI: <code>OPENAI_API_KEY</code> ·
+                Anthropic: <code>ANTHROPIC_API_KEY</code> · Groq: <code>GROQ_API_KEY</code>
               </div>
             </div>
           </div>
         </div>
       </section>
+    </div>
+  </div>
+
+  <aside class="copilot-dock" id="copilot-dock" aria-label="Copilot">
+    <div class="copilot-head">
+      <strong>Copilot</strong>
+      <button class="icon-btn" id="btn-copilot-close" type="button">✕</button>
+    </div>
+    <div id="copilot-context" class="copilot-ctx">Loading context…</div>
+    <div class="copilot-body">
+      <div id="copilot-messages" class="chat-box" style="height:auto;min-height:220px;margin:0">
+        <div class="msg msg-sys">I run tools: Apex dossiers, research, scrape, Wayback, registries, GDPR, health. Ask in English or Bulgarian.</div>
+      </div>
+    </div>
+    <div class="copilot-input">
+      <textarea id="copilot-input" placeholder="Ask Copilot to research, extract, or inspect…"></textarea>
+      <button class="btn btn-primary" id="btn-copilot-send" type="button" style="width:100%">Run</button>
+    </div>
+  </aside>
+
+  <div class="overlay" id="palette-overlay">
+    <div class="palette">
+      <input id="palette-input" type="text" placeholder="Jump to a page or run an action…" autocomplete="off" />
+      <div class="palette-list" id="palette-list"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="shortcuts-overlay">
+    <div class="shortcuts-card">
+      <h3>Keyboard shortcuts</h3>
+      <div class="shortcut-row"><span>Command palette</span><span><span class="kbd">Ctrl</span> <span class="kbd">K</span></span></div>
+      <div class="shortcut-row"><span>Toggle copilot</span><span><span class="kbd">Ctrl</span> <span class="kbd">J</span></span></div>
+      <div class="shortcut-row"><span>Feature Inspector</span><span><span class="kbd">Ctrl</span> <span class="kbd">I</span></span></div>
+      <div class="shortcut-row"><span>This cheat sheet</span><span><span class="kbd">?</span></span></div>
+      <div class="shortcut-row"><span>Close overlay</span><span><span class="kbd">Esc</span></span></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="playbook-overlay">
+    <div class="playbook-card">
+      <div class="playbook-head">
+        <h3>Feature Inspector & Arsenal Guide</h3>
+        <button class="icon-btn" id="btn-playbook-close" type="button">✕</button>
+      </div>
+      <p class="muted-sm" id="playbook-stance"></p>
+      <div id="playbook-list" class="playbook-list"></div>
     </div>
   </div>
 

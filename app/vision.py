@@ -6,7 +6,7 @@ import base64
 import io
 from typing import Any, Optional
 
-import requests
+from app.http_client import safe_get
 
 from app.config import (
     GROQ_API_KEY,
@@ -46,12 +46,20 @@ def capture_screenshot(url: str, width: int = 1280, height: int = 900) -> tuple[
     """Capture page screenshot. Returns (png_bytes, method)."""
     if PLAYWRIGHT_AVAILABLE:
         try:
+            from app.browser.profiles import playwright_context_kwargs
+            from app.probe.ghost_cursor import human_idle, human_scroll
+
+            kwargs = playwright_context_kwargs("desktop_chrome")
+            kwargs["viewport"] = {"width": width, "height": height}
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-                page = browser.new_page(viewport={"width": width, "height": height})
+                context = browser.new_context(**kwargs)
+                page = context.new_page()
                 page.goto(url, wait_until="networkidle", timeout=25000)
-                page.wait_for_timeout(1500)
+                human_idle(page, 200, 600)
+                human_scroll(page)
                 png = page.screenshot(full_page=False, type="png")
+                context.close()
                 browser.close()
                 return png, "playwright"
         except Exception:
@@ -108,7 +116,7 @@ def _vision_llm_analyze(image_b64: str, goal: str = "", provider: Optional[str] 
 
 def _html_fallback_analyze(url: str, goal: str = "") -> dict[str, Any]:
     """Fallback when screenshot/vision unavailable — semantic HTML + text LLM."""
-    resp = requests.get(url, timeout=15, headers={"User-Agent": "ArgosScout-Vision/1.0"})
+    resp = safe_get(url, timeout=15)
     sem = semantic_extract(resp.text, url)
     prompt = f"""Analyze this webpage text and extract structured data as JSON.
 URL: {url}

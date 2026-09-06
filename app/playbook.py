@@ -20,6 +20,26 @@ ENTRIES: list[dict[str, Any]] = [
         "outputs": ["dossier", "citations", "knowledge graph"],
     },
     {
+        "id": "research_discovery",
+        "name": "Discovery Inbox (Layer A)",
+        "category": "orchestration",
+        "summary": "Collects public traces, registry hits, and archive notes into an unverified inbox. Snippets are traces, not read sources.",
+        "use_when": "You want coverage first without pretending every hit is true.",
+        "expected": "Research Inbox with documents, candidate entities, claims at not_requested. Banner that a source ≠ a true claim.",
+        "legal": "Same access policy, SSRF, privacy layer, and risk gate as the rest of ArgosScout. No probe, no CAPTCHA bypass.",
+        "outputs": ["documents", "claims", "entity_candidates", "coverage_map"],
+    },
+    {
+        "id": "research_verification",
+        "name": "Verification Center (Layer B)",
+        "category": "orchestration",
+        "summary": "Optional second pass: analyze collected evidence or cross-check with a separate budget. No single truth score.",
+        "use_when": "You picked claims/entities to assess. Do not run it silently after every search.",
+        "expected": "Per-claim statuses (supported/disputed/contradicted/insufficient_evidence) plus reliability, quality, freshness, use-risk, independence.",
+        "legal": "Assessments never overwrite source excerpts. Human merge/split is logged. Erase removes derived records too.",
+        "outputs": ["assessments", "evidence_links", "gap_map"],
+    },
+    {
         "id": "quick_scrape",
         "name": "Quick Scrape",
         "category": "extract",
@@ -216,8 +236,9 @@ def get_playbook() -> dict[str, Any]:
     return {
         "title": "ArgosScout Feature Inspector",
         "stance": (
-            "ArgosScout is a privacy-first research OS. High-risk options "
-            "(FlareSolverr sidecar, TLS impersonation, fingerprint profiles, "
+            "ArgosScout is a privacy-first research OS. Discovery collects unverified traces; "
+            "Verification is an optional second pass and never a silent truth score. "
+            "High-risk options (FlareSolverr sidecar, TLS impersonation, fingerprint profiles, "
             "LinkedIn public fetch, GitHub commit emails) stay off until the operator "
             "reads the notice, types the acceptance phrase, and enables each switch. "
             "When a live page refuses inspection, prefer the lawful fallback tree."

@@ -222,6 +222,54 @@ async def tool_apex_run(
     }
 
 
+def tool_research_discover(
+    query: str,
+    mode: str = "quick",
+    workflow: str = "discover_only",
+    include_people: bool = False,
+    privacy_layer: str = "",
+    country: str = "",
+) -> dict[str, Any]:
+    from app.research.discovery import run_discovery
+
+    pack = run_discovery(
+        query,
+        mode=mode or "quick",
+        workflow=workflow or "discover_only",
+        privacy_layer=privacy_layer,
+        country=country,
+        include_people=bool(include_people),
+    )
+    return {
+        "task_id": pack["task"]["id"],
+        "status": pack["task"]["status"],
+        "banner": pack.get("banner"),
+        "counts": pack.get("counts"),
+        "unverified": True,
+        "documents": [
+            {"id": d["id"], "title": d["title"], "url": d["url"], "verification_status": d["verification_status"]}
+            for d in (pack.get("documents") or [])[:12]
+        ],
+    }
+
+
+def tool_research_verify(
+    task_id: str = "",
+    scope: str = "selected",
+    level: str = "analyze",
+    ids: Optional[list[str]] = None,
+) -> dict[str, Any]:
+    from app.research.store import list_tasks
+    from app.research.verification import run_verification
+
+    if not task_id:
+        tasks = list_tasks(1)
+        task_id = (tasks[0]["id"] if tasks else "")
+    if not task_id:
+        return {"error": "No research task yet. Run Discovery first."}
+    return run_verification(task_id, scope=scope or "entire", level=level or "analyze", ids=ids or None)
+
+
 TOOL_SPECS: list[ToolSpec] = [
     ToolSpec(
         name="inspect_health",
@@ -390,6 +438,37 @@ TOOL_SPECS: list[ToolSpec] = [
             "required": ["target"],
         },
         handler=tool_apex_run,
+    ),
+    ToolSpec(
+        name="research_discover",
+        description="Layer A Discovery: collect unverified public traces into a Research Inbox. Does not start verification or live probe.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "mode": {"type": "string"},
+                "workflow": {"type": "string"},
+                "include_people": {"type": "boolean"},
+                "privacy_layer": {"type": "string"},
+                "country": {"type": "string"},
+            },
+            "required": ["query"],
+        },
+        handler=tool_research_discover,
+    ),
+    ToolSpec(
+        name="research_verify",
+        description="Layer B Verification: assess selected or all collected claims. Optional. Never overwrites source excerpts.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "scope": {"type": "string"},
+                "level": {"type": "string"},
+                "ids": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        handler=tool_research_verify,
     ),
 ]
 

@@ -17,6 +17,7 @@
       <button class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span data-i18n="nav_dashboard">Dashboard</span></button>
       <button class="nav-item" data-page="agent"><span class="nav-icon">🔭</span><span>Argos Agent</span></button>
       <button class="nav-item" data-page="apex"><span class="nav-icon">♛</span><span>Apex Master</span></button>
+      <button class="nav-item" data-page="research"><span class="nav-icon">◎</span><span>Research</span></button>
       <button class="nav-item" data-page="detective"><span class="nav-icon">🕵️</span><span>Smart Detective</span></button>
       <button class="nav-item" data-page="chat"><span class="nav-icon">🤖</span><span data-i18n="nav_chat">LLM Chat</span></button>
       <div class="nav-group" data-i18n="nav_extract">Extract</div>
@@ -49,7 +50,7 @@
         <button class="icon-btn" id="btn-locale" title="Language">EN</button>
         <button class="icon-btn" id="btn-playbook" title="Feature Inspector">📘</button>
         <button class="icon-btn" id="btn-shortcuts" title="Shortcuts">?</button>
-        <span class="badge badge-green">v8.1</span>
+        <span class="badge badge-green">v8.2</span>
       </div>
     </header>
 
@@ -221,6 +222,125 @@
               <div class="msg msg-sys">Run Apex to produce a cited intelligence pack.</div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section id="page-research" class="page">
+        <div class="research-hero">
+          <div class="card">
+            <div class="card-header">Dual-layer research</div>
+            <div class="card-body">
+              <p class="muted-sm" style="margin-bottom:.85rem">
+                Layer A collects traces. Layer B is optional and never a single truth score.
+                Presence of a source does not confirm a claim.
+              </p>
+              <div class="chips">
+                <span class="chip" data-research="IANA https://www.iana.org">IANA</span>
+                <span class="chip" data-research="https://example.com organization footprint">example.com</span>
+                <span class="chip" data-research="Internet Society public registry">ISOC</span>
+              </div>
+              <label>Question / organization</label>
+              <textarea id="research-query" placeholder="e.g. Example Organization https://example.com"></textarea>
+              <div class="row">
+                <div>
+                  <label>Mode</label>
+                  <select id="research-mode">
+                    <option value="quick">Quick</option>
+                    <option value="deep">Deep</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Workflow</label>
+                  <select id="research-workflow">
+                    <option value="discover_only">Discover only</option>
+                    <option value="discover_then_verify">Discover → Verify</option>
+                  </select>
+                </div>
+              </div>
+              <div class="toggle-row">
+                <input type="checkbox" id="research-people" />
+                <label for="research-people" style="margin:0">Include named people (no network expansion)</label>
+              </div>
+              <p id="research-forecast" class="muted-sm">Forecast loads after you pick a mode.</p>
+              <div class="row">
+                <button class="btn btn-primary" id="btn-research-run" type="button">Discover</button>
+                <button class="btn btn-secondary" id="btn-research-cancel" type="button">Cancel</button>
+                <button class="btn btn-secondary" id="btn-research-export" type="button">Export</button>
+              </div>
+              <div id="research-run-status" class="muted-sm" style="margin-top:.6rem">Idle — nothing collected yet.</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">Live process</div>
+            <div class="card-body">
+              <div class="argos-stage" id="argos-stage" data-state="idle" aria-live="polite">
+                <div class="argos-eye">
+                  <div class="argos-ring r1"></div>
+                  <div class="argos-ring r2"></div>
+                  <div class="argos-ring r3"></div>
+                  <div class="argos-sweep"></div>
+                  <div class="argos-pupil"></div>
+                  <span class="argos-firefly f1"></span>
+                  <span class="argos-firefly f2"></span>
+                  <span class="argos-firefly f3"></span>
+                </div>
+                <div class="argos-caption" id="argos-caption">Waiting for a question</div>
+                <div class="argos-sub" id="argos-sub">Discovery and verification use separate budgets.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="alert alert-info" id="research-banner" style="margin:1rem 0">
+          Unverified: the presence of a source does not confirm that a claim is true.
+          Непроверено: наличието на източник не потвърждава истинността на твърдението.
+        </div>
+        <div class="research-tabs" role="tablist">
+          <button class="research-tab active" data-rtab="inbox" type="button">Inbox</button>
+          <button class="research-tab" data-rtab="verify" type="button">Verify</button>
+          <button class="research-tab" data-rtab="evidence" type="button">Evidence</button>
+          <button class="research-tab" data-rtab="report" type="button">Report</button>
+          <button class="research-tab" data-rtab="inspector" type="button">Developer Inspector</button>
+        </div>
+        <div class="research-panel active" id="rtab-inbox">
+          <div class="row" style="margin-bottom:.7rem">
+            <input type="search" id="research-filter" placeholder="Filter inbox…" />
+            <select id="research-type-filter">
+              <option value="">All types</option>
+              <option value="search">Search traces</option>
+              <option value="registry">Registries</option>
+              <option value="archive">Archives</option>
+              <option value="people">People</option>
+            </select>
+          </div>
+          <div id="research-inbox" class="research-list"><div class="empty-state">No materials yet. Run Discovery.</div></div>
+        </div>
+        <div class="research-panel" id="rtab-verify">
+          <p class="muted-sm">Verification does not silently start a new wide search unless you pick Cross-check.</p>
+          <div class="row">
+            <select id="research-v-scope">
+              <option value="entire">Entire research</option>
+              <option value="selected">Selected inbox items</option>
+              <option value="claim">This claim</option>
+              <option value="entity">This entity</option>
+            </select>
+            <select id="research-v-level">
+              <option value="analyze">Analyze collected evidence</option>
+              <option value="cross_check">Cross-check with new sources</option>
+            </select>
+            <button class="btn btn-primary" id="btn-research-verify" type="button">Verify</button>
+            <button class="btn btn-secondary" id="btn-research-replay" type="button">Replay assessments</button>
+          </div>
+          <div id="research-verify-out" class="research-list" style="margin-top:.8rem"><div class="empty-state">Nothing verified yet.</div></div>
+        </div>
+        <div class="research-panel" id="rtab-evidence">
+          <div id="research-evidence" class="research-list"><div class="empty-state">Open a claim after verification.</div></div>
+        </div>
+        <div class="research-panel" id="rtab-report">
+          <div id="research-report" class="research-list"><div class="empty-state">Report appears after Discovery.</div></div>
+        </div>
+        <div class="research-panel" id="rtab-inspector">
+          <pre id="research-inspector" class="json-view" style="max-height:420px">// Raw JSON hidden from the main workflow</pre>
         </div>
       </section>
 

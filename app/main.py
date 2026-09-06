@@ -107,6 +107,7 @@ from app.universal_scraper import (
 from app.wayback import temporal_analysis
 from app.http_client import safe_get
 from app.routers.workspace import router as workspace_router
+from app.routers.research import router as research_router
 from app.security.middleware import install_security_middleware
 from app.security.ssrf import UnsafeURLError
 
@@ -133,6 +134,7 @@ app = FastAPI(
 )
 install_security_middleware(app)
 app.include_router(workspace_router)
+app.include_router(research_router)
 
 static_dir = BASE_DIR / "app" / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -155,6 +157,8 @@ async def root():
 
 @app.get("/health")
 async def health():
+    from app.config import RESEARCH_LAYERS_ENABLED, RESEARCH_LOCAL_ONLY, LLM_PROVIDER
+
     risk = get_risk_status()
     return {
         "status": "ok",
@@ -182,6 +186,11 @@ async def health():
         "risk": {
             "acknowledged": risk["acknowledged"],
             "any_enabled": risk["any_enabled"],
+        },
+        "research": {
+            "layers_enabled": RESEARCH_LAYERS_ENABLED,
+            "local_only": RESEARCH_LOCAL_ONLY or LLM_PROVIDER in {"rule", "ollama"},
+            "workflows": ["discover_only", "discover_then_verify"],
         },
     }
 

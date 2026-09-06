@@ -25,8 +25,12 @@ def get_runtime_context() -> dict[str, Any]:
     llm = get_llm_status()
     apex = get_last_apex_run()
     from app.compliance.risk_gate import get_status as get_risk_status
+    from app.research.store import list_tasks
+    from app.research.verification import cloud_llm_allowed
 
     risk = get_risk_status()
+    research_tasks = list_tasks(3)
+    last_research = research_tasks[0] if research_tasks else None
     return {
         "version": APP_VERSION,
         "privacy_layer": DEFAULT_PRIVACY_LAYER,
@@ -64,6 +68,12 @@ def get_runtime_context() -> dict[str, Any]:
             "any_enabled": risk["any_enabled"],
             "capabilities": risk["capabilities"],
         },
+        "research": {
+            "last_id": (last_research or {}).get("id"),
+            "last_status": (last_research or {}).get("status"),
+            "last_query": (last_research or {}).get("query"),
+            "cloud_llm": cloud_llm_allowed(),
+        },
     }
 
 
@@ -81,6 +91,7 @@ def context_prompt_block() -> str:
         f"- pheromones={len(pher)} backend={(ctx.get('pheromone_backend') or {}).get('backend')}",
         f"- obstacles={len(obstacles)}",
         f"- risk_ack={(ctx.get('risk') or {}).get('acknowledged')} high_risk={(ctx.get('risk') or {}).get('any_enabled')}",
+        f"- research_last={(ctx.get('research') or {}).get('last_id')} status={(ctx.get('research') or {}).get('last_status')}",
     ]
     for item in pher[:4]:
         lines.append(f"  pheromone {item.get('ptype')} {item.get('url_pattern')}")

@@ -488,6 +488,90 @@ body.copilot-open .copilot-dock { display: flex; }
 .dossier-kicker { font-size: .78rem; color: var(--muted); margin-bottom: .5rem; }
 .dossier-headline { font-size: 1.05rem; font-weight: 700; margin-bottom: .5rem; }
 
+.research-hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 1rem; }
+@media (max-width: 980px) { .research-hero { grid-template-columns: 1fr; } }
+.research-tabs { display: flex; gap: .4rem; flex-wrap: wrap; margin: .4rem 0 1rem; }
+.research-tab {
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 999px; padding: .35rem .8rem; cursor: pointer; font-size: .82rem;
+}
+.research-tab.active { border-color: var(--accent); background: var(--accent-soft); }
+.research-panel { display: none; }
+.research-panel.active { display: block; }
+.research-list { display: grid; gap: .65rem; }
+.research-item {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: .75rem .9rem;
+}
+.research-item header { display: flex; justify-content: space-between; gap: .6rem; align-items: baseline; }
+.badge-unverified { color: var(--warning); font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; }
+.badge-status { font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; }
+.badge-status.supported { color: var(--success); }
+.badge-status.disputed, .badge-status.contradicted { color: var(--danger); }
+.badge-status.insufficient_evidence, .badge-status.not_requested { color: var(--warning); }
+.empty-state, .loading-state, .error-state, .partial-state {
+  padding: 1.1rem; border: 1px dashed var(--border); border-radius: 12px; color: var(--muted);
+}
+.argos-stage {
+  min-height: 220px; display: grid; place-items: center; text-align: center; gap: .55rem;
+}
+.argos-eye {
+  position: relative; width: 148px; height: 148px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, #1a2230 0%, #0b0d12 70%);
+  box-shadow: inset 0 0 0 1px var(--border), 0 0 32px rgba(118,185,0,.12);
+}
+.argos-ring {
+  position: absolute; inset: 12px; border-radius: 50%;
+  border: 1px dashed rgba(118,185,0,.35);
+}
+.argos-ring.r2 { inset: 26px; border-style: dotted; animation: argos-spin 12s linear infinite reverse; }
+.argos-ring.r3 { inset: 40px; border-color: rgba(91,140,255,.35); animation: argos-spin 8s linear infinite; }
+.argos-ring.r1 { animation: argos-spin 18s linear infinite; }
+.argos-sweep {
+  position: absolute; inset: 8px; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 70%, rgba(118,185,0,.35) 85%, transparent 100%);
+  animation: argos-spin 3.2s linear infinite;
+  opacity: .55;
+}
+.argos-pupil {
+  position: absolute; left: 50%; top: 50%; width: 22px; height: 22px;
+  margin: -11px 0 0 -11px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #d8ff9a, #76b900 45%, #1b2a10 80%);
+  box-shadow: 0 0 16px rgba(118,185,0,.55);
+}
+.argos-firefly {
+  position: absolute; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 10px var(--accent);
+  animation: argos-orbit 4.5s linear infinite;
+}
+.argos-firefly.f1 { top: 10px; left: 70px; animation-duration: 4.5s; }
+.argos-firefly.f2 { top: 68px; left: 12px; animation-duration: 6s; animation-delay: -.8s; }
+.argos-firefly.f3 { top: 110px; left: 96px; animation-duration: 5.2s; animation-delay: -1.4s; }
+.argos-caption { font-weight: 650; }
+.argos-sub { font-size: .8rem; color: var(--muted); max-width: 28rem; }
+.argos-stage[data-state="idle"] .argos-sweep { animation-play-state: paused; opacity: .2; }
+.argos-stage[data-state="discover"] .argos-pupil { animation: argos-pulse 1.4s ease-in-out infinite; }
+.argos-stage[data-state="verify"] .argos-sweep {
+  background: conic-gradient(from 0deg, transparent 0 60%, rgba(240,192,64,.4) 82%, transparent 100%);
+}
+.argos-stage[data-state="verify"] .argos-pupil {
+  background: radial-gradient(circle at 35% 35%, #fff3c4, #f0c040 50%, #3a2d08 80%);
+}
+.argos-stage[data-state="done"] .argos-sweep { opacity: .15; animation-play-state: paused; }
+.argos-stage[data-state="error"] .argos-pupil {
+  background: radial-gradient(circle at 35% 35%, #ffd0d0, #ff6b6b 50%, #3a1010 80%);
+}
+@keyframes argos-spin { to { transform: rotate(360deg); } }
+@keyframes argos-orbit {
+  from { transform: rotate(0deg) translateX(58px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(58px) rotate(-360deg); }
+}
+@keyframes argos-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+
 html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before {
   animation: none !important;
   transition: none !important;

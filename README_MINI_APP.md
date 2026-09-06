@@ -267,9 +267,15 @@ python3 run_app.py
 
 ## Deploy
 
-**Railway, Docker, or a VM** is the real host: SQLite persists, predictive/inbox loops run, Playwright can live there.
+**Railway is the supported host** (long-running uvicorn, writable disk, optional volume at `/data`). Bind address is `0.0.0.0` and the listen port is `PORT` (Railway) or `APP_PORT` (local). Start command:
 
-**Vercel** auto-detects FastAPI at `app/main.py` and runs it as a Function. That is enough for the dashboard and `/health`, with caveats:
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+Set `DATA_DIR=/data` when a volume is mounted so SQLite and the generated admin secret survive redeploys. `INBOX_ENABLED` stays off unless IMAP is configured.
+
+**Vercel** auto-detects FastAPI at `app/main.py` and runs it as a Function. That is enough for a dashboard probe, with caveats:
 
 - The app filesystem is read-only. Data, SQLite, and the generated admin secret go to `/tmp/argoscout-data` and vanish on cold start.
 - Background predictive and IMAP loops do not start (`VERCEL=1`).

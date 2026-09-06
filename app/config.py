@@ -240,7 +240,7 @@ def _bootstrap_admin_secret() -> tuple[str, str]:
 ADMIN_SECRET, ADMIN_SECRET_SOURCE = _bootstrap_admin_secret()
 
 APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
-APP_PORT = int(os.getenv("APP_PORT", "8000"))
+APP_PORT = int(os.getenv("PORT") or os.getenv("APP_PORT", "8000"))
 
 USER_AGENT = os.getenv("USER_AGENT", f"ArgosScout/{APP_VERSION}")
 

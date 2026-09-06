@@ -1,8 +1,10 @@
 """Coherent browser profiles: matching User-Agent + viewport + locale.
 
 This is identity consistency for Playwright launches we already use.
-It does not spoof TLS/JA3, Canvas, or WebGL, and it is not a Cloudflare bypass.
-When a live page refuses inspection, use the lawful fallback tree instead.
+Canvas/WebGL/Audio overrides apply only after the operator risk gate
+(`fingerprint_profiles`) is acknowledged. They are not a Cloudflare bypass.
+When a live page refuses inspection, use the lawful fallback tree, or a
+user-run FlareSolverr sidecar if that option is enabled.
 """
 
 from __future__ import annotations
@@ -19,6 +21,12 @@ PROFILES: dict[str, dict[str, Any]] = {
         "viewport": {"width": 1440, "height": 900},
         "locale": "en-US",
         "timezone_id": "UTC",
+        "platform": "Linux x86_64",
+        "webgl_vendor": "Google Inc. (Intel)",
+        "webgl_renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics, OpenGL 4.6)",
+        "hardware_concurrency": 8,
+        "device_memory": 8,
+        "audio_sample_rate": 44100,
     },
     "desktop_firefox": {
         "name": "Desktop Firefox",
@@ -28,6 +36,12 @@ PROFILES: dict[str, dict[str, Any]] = {
         "viewport": {"width": 1366, "height": 768},
         "locale": "en-US",
         "timezone_id": "UTC",
+        "platform": "Linux x86_64",
+        "webgl_vendor": "Mesa",
+        "webgl_renderer": "Mesa Intel(R) UHD Graphics",
+        "hardware_concurrency": 8,
+        "device_memory": 8,
+        "audio_sample_rate": 48000,
     },
 }
 

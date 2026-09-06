@@ -122,6 +122,7 @@ function showPage(id) {
   if (id === "compliance") loadComplianceLayers();
   if (id === "detective" && $("det-country")) $("det-country").value = state.country;
   if (id === "apex") loadLastApex();
+  if (id === "settings") loadRiskStatus();
   loadCopilotContext();
 }
 
@@ -866,7 +867,9 @@ async function loadCopilotContext() {
     const last = d.last_scan ? `${d.last_scan.mode} ${d.last_scan.success ? "✓" : "✗"}` : "none";
     const pher = (d.pheromones || []).length;
     const obs = (d.obstacles || []).length;
-    box.innerHTML = `Layer <strong>${d.privacy_layer || "—"}</strong> · last ${last} · pheromones ${pher} · obstacles ${obs} · admin ${d.admin_secret_source}`;
+    const risk = d.risk || {};
+    const riskLabel = risk.any_enabled ? "high-risk on" : risk.acknowledged ? "risk ack, switches off" : "high-risk off";
+    box.innerHTML = `Layer <strong>${d.privacy_layer || "—"}</strong> · last ${last} · pheromones ${pher} · obstacles ${obs} · ${riskLabel} · admin ${d.admin_secret_source}`;
   } catch {
     box.textContent = "Context offline.";
   }
@@ -957,6 +960,155 @@ async function openPlaybook() {
 
 function closePlaybook() {
   $("playbook-overlay")?.classList.remove("open");
+}
+
+const RISK_CAP_IDS = {
+  flaresolverr: "risk-flaresolverr",
+  tls_impersonate: "risk-tls",
+  fingerprint_profiles: "risk-fingerprint",
+  linkedin_public_fetch: "risk-linkedin",
+  github_commit_emails: "risk-github",
+};
+
+function closeRiskNotice() {
+  $("risk-overlay")?.classList.remove("open");
+}
+
+function applyRiskStatus(d) {
+  const line = $("risk-status-line");
+  const toggles = $("risk-toggles");
+  if (!line || !d) return;
+  const caps = d.capabilities || {};
+  const enabled = Object.entries(caps).filter(([, on]) => on).map(([name]) => name);
+  if (!d.acknowledged) {
+    line.textContent = "All high-risk options are off until you read and accept the notice.";
+    toggles?.classList.add("hidden");
+    return;
+  }
+  line.textContent = enabled.length
+    ? `Notice accepted. Enabled: ${enabled.join(", ")}`
+    : "Notice accepted. Switches stay off until you enable them below.";
+  toggles?.classList.remove("hidden");
+  Object.entries(RISK_CAP_IDS).forEach(([cap, id]) => {
+    const el = $(id);
+    if (el) el.checked = Boolean(caps[cap]);
+  });
+}
+
+async function loadRiskStatus() {
+  if (!state.apiKey || !$("risk-status-line")) return;
+  try {
+    const r = await fetch("/api/v1/compliance/risk/status", { headers: authHeaders() });
+    if (!r.ok) return;
+    applyRiskStatus(await r.json());
+  } catch {}
+}
+
+async function openRiskNotice() {
+  $("risk-overlay")?.classList.add("open");
+  $("risk-phrase") && ($("risk-phrase").value = "");
+  $("risk-authorized") && ($("risk-authorized").checked = false);
+  try {
+    const r = await fetch("/api/v1/compliance/risk");
+    const d = await r.json();
+    const text = resolvedLocale() === "bg" ? d.notice_bg : d.notice_en;
+    if ($("risk-notice-text")) $("risk-notice-text").textContent = text || "";
+  } catch (e) {
+    if ($("risk-notice-text")) $("risk-notice-text").textContent = "Could not load the operator notice.";
+  }
+}
+
+async function acceptRiskNotice() {
+  if (!state.apiKey) {
+    alert(t("need_key"));
+    showPage("settings");
+    return;
+  }
+  if (!$("risk-authorized")?.checked) {
+    alert("Confirm lawful basis / authorized use before accepting.");
+    return;
+  }
+  const phrase = ($("risk-phrase")?.value || "").trim();
+  try {
+    const r = await fetch("/api/v1/compliance/risk/acknowledge", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ phrase, authorized_use: true, capabilities: {} }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || d.error || "Acknowledgment rejected");
+    applyRiskStatus(d);
+    closeRiskNotice();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function saveRiskCaps() {
+  if (!state.apiKey) return alert(t("need_key"));
+  const capabilities = {};
+  Object.entries(RISK_CAP_IDS).forEach(([cap, id]) => {
+    capabilities[cap] = Boolean($(id)?.checked);
+  });
+  try {
+    const r = await fetch("/api/v1/compliance/risk/capabilities", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ capabilities }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || d.error || "Could not save switches");
+    applyRiskStatus(d);
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function revokeRisk() {
+  if (!state.apiKey) return alert(t("need_key"));
+  if (!window.confirm("Revoke the acknowledgment and turn every high-risk switch off?")) return;
+  try {
+    const r = await fetch("/api/v1/compliance/risk/revoke", { method: "POST", headers: authHeaders() });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Revoke failed");
+    applyRiskStatus(d);
+    Object.values(RISK_CAP_IDS).forEach((id) => { if ($(id)) $(id).checked = false; });
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function postRiskOp(path, body) {
+  if (!state.apiKey) return alert(t("need_key"));
+  const out = $("risk-ops-result");
+  if (out) out.textContent = "Running…";
+  try {
+    const r = await fetch(path, { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+    const d = await r.json();
+    if (out) out.textContent = JSON.stringify(d, null, 2);
+  } catch (e) {
+    if (out) out.textContent = "Error: " + e.message;
+  }
+}
+
+function runFlareSolverrFetch() {
+  const url = $("risk-fs-url")?.value.trim();
+  if (!url) return alert("Enter a target URL.");
+  return postRiskOp("/api/v1/recon/flaresolverr", { url });
+}
+
+function runLinkedInFetch() {
+  const url = $("risk-li-url")?.value.trim();
+  if (!url) return alert("Enter a LinkedIn URL.");
+  return postRiskOp("/api/v1/osint/linkedin", { url });
+}
+
+function runGithubEmailsFetch() {
+  const owner = $("risk-gh-owner")?.value.trim();
+  const repo = $("risk-gh-repo")?.value.trim();
+  const url = $("risk-gh-url")?.value.trim();
+  if (!url && (!owner || !repo)) return alert("Enter owner and repo, or a github.com URL.");
+  return postRiskOp("/api/v1/osint/github-emails", { owner, repo, url, limit: 20 });
 }
 
 function paletteItems(query) {
@@ -1100,6 +1252,18 @@ function init() {
   $("btn-apex-run")?.addEventListener("click", runApex);
   $("btn-playbook")?.addEventListener("click", openPlaybook);
   $("btn-playbook-close")?.addEventListener("click", closePlaybook);
+  $("btn-risk-notice")?.addEventListener("click", openRiskNotice);
+  $("btn-risk-close")?.addEventListener("click", closeRiskNotice);
+  $("btn-risk-accept")?.addEventListener("click", acceptRiskNotice);
+  $("btn-risk-save-caps")?.addEventListener("click", saveRiskCaps);
+  $("btn-risk-revoke")?.addEventListener("click", revokeRisk);
+  $("btn-risk-fs")?.addEventListener("click", runFlareSolverrFetch);
+  $("btn-risk-li")?.addEventListener("click", runLinkedInFetch);
+  $("btn-risk-gh")?.addEventListener("click", runGithubEmailsFetch);
+  $("risk-overlay")?.addEventListener("click", (e) => { if (e.target.id === "risk-overlay") closeRiskNotice(); });
+  $("risk-phrase")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); acceptRiskNotice(); }
+  });
   document.querySelectorAll(".chip[data-apex]").forEach((el) => {
     el.addEventListener("click", () => { $("apex-target").value = el.dataset.apex; });
   });
@@ -1181,6 +1345,7 @@ function init() {
     if (e.key === "Escape") {
       closePalette();
       closePlaybook();
+      closeRiskNotice();
       toggleShortcuts(false);
     }
     if (e.key === "?" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
@@ -1196,6 +1361,7 @@ function init() {
   loadHealth();
   loadDashboard();
   loadCopilotContext();
+  loadRiskStatus();
   showPage("dashboard");
 }
 

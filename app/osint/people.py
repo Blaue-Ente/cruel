@@ -1,6 +1,7 @@
 """Public professional footprint — news, Wikipedia, GitHub users.
 
-No LinkedIn scraping, no commit-email harvesting.
+LinkedIn stays a search URL here. Unauthenticated public fetch is a separate
+opt-in (`linkedin_public_fetch`) via POST /api/v1/osint/linkedin.
 """
 
 from __future__ import annotations
@@ -62,7 +63,7 @@ def public_people_footprint(name: str, company: str = "") -> dict[str, Any]:
     news = search_web(f"{query} interview OR keynote OR speaker", max_results=5)
     wiki = wikipedia_summary(name)
     github = github_user_public(name.split()[-1] if name else "")
-    return {
+    result: dict[str, Any] = {
         "subject": name,
         "company": company,
         "news": news[:5],
@@ -73,6 +74,7 @@ def public_people_footprint(name: str, company: str = "") -> dict[str, Any]:
             if query
             else None
         ),
-        "note": "Public search links and APIs only. LinkedIn is a search URL, not a scrape.",
+        "note": "Public search links and APIs only. LinkedIn fetch is a separate operator opt-in.",
         "success": bool(news or wiki.get("ok") or github.get("ok")),
     }
+    return result

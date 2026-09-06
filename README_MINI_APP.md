@@ -1,4 +1,4 @@
-# ArgosScout v8 — Autonomous OSINT & Deep Intelligence OS
+# ArgosScout v8.1 — Autonomous OSINT & Deep Intelligence OS
 
 Self-hosted research workstation: ask a question, get a **cited, compliance-aware dossier**. Copilot executes tools (Apex, search, extract, Wayback, registries, GDPR) instead of chatting in circles.
 
@@ -8,11 +8,31 @@ Self-hosted research workstation: ask a question, get a **cited, compliance-awar
 
 - **BYOK LLM hub** — OpenRouter (Claude / DeepSeek / Llama / Mistral / Gemini), OpenAI, Anthropic, Groq, NVIDIA, Hugging Face, local Ollama. Light tasks (routing, extract) go to fast/cheap models; dossiers and plans use reasoning models with fallback.
 - **Apex Master Mode** — one target (`Company X and its C-suite`) → planner tree → cited forensic dossier, confidence, Person→Role→Company→Domain graph. Live Active Probe is never started from Apex.
-- **Lawful fallback tree** — if live DOM is blocked: RSS/Atom, sitemap/JSON-LD, CDN hosts, RDAP, DNS TXT, Wayback, Common Crawl. **Not implemented:** Cloudflare challenge solvers, JA3/JA4 spoofing, canvas/WebGL noise, FlareSolverr.
-- **Corporate + people OSINT** — SEC EDGAR, Companies House, OpenCorporates, GitHub **public** org/user APIs, HTML tech-stack, careers-page signals, Wikipedia, news. LinkedIn is a **search URL only**. No commit-email harvesting.
+- **Lawful fallback tree** — if live DOM is blocked: RSS/Atom, sitemap/JSON-LD, CDN hosts, RDAP, DNS TXT, Wayback, Common Crawl. Optional **operator risk gate** (off by default): BYO FlareSolverr, optional `curl_cffi` TLS impersonation, coherent WebGL/Audio profiles (no canvas noise), unauthenticated LinkedIn GET, GitHub public commit emails for a repo you name.
+- **Corporate + people OSINT** — SEC EDGAR, Companies House, OpenCorporates, GitHub **public** org/user APIs, HTML tech-stack, careers-page signals, Wikipedia, news. LinkedIn is a **search URL** unless you accept the risk notice and enable public fetch. Commit-email harvest is the same opt-in, named repo only.
 - **Feature Inspector** (`Ctrl+I`) — human playbook for Swarm Pheromones, Provocative Stock, API Fuzz, Temporal Spoofing, Ghost Cursor, privacy layers, Apex.
 - **Dashboard** — status rings and provider pills instead of raw JSON dumps.
 - **Admin secret hygiene** — shipped default is rejected. Empty `ADMIN_SECRET` generates `data/.admin_secret` (mode 0600). Health reports `admin_secret_source`, never the secret.
+- **Operator risk gate** — Settings → read the EN/BG notice → confirm authorized use → type `I ACCEPT THE RISK` or `ПРИЕМАМ РИСКА` → enable each switch. Revoke turns everything off. ArgosScout does **not** ship a Cloudflare/Turnstile solver.
+
+## Operator risk gate
+
+All of the following are **off until you opt in**. Enabling them is your legal responsibility.
+
+| Option | What it actually does | What it does not do |
+|--------|----------------------|---------------------|
+| FlareSolverr | POST to **your** instance (`FLARESOLVERR_URL`, default loopback `:8191`) | No bundled CF/Turnstile solver |
+| TLS impersonate | Optional `curl_cffi` Chrome-like JA3 GET | Not a WAF exploit; still SSRF-gated |
+| Fingerprint profiles | Align UA / platform / WebGL / AudioContext; hide `navigator.webdriver` | No canvas noise, not anti-detect-as-a-service |
+| LinkedIn public fetch | Unauthenticated GET; login wall / 999 **fail closed** | No stealth login |
+| GitHub commit emails | Public commits API for a **repo you name**, max 30 | No GitHub-wide person hunt |
+
+```bash
+# After acknowledging in Settings and enabling flaresolverr:
+# docker run -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
+FLARESOLVERR_URL=http://127.0.0.1:8191
+# pip install curl_cffi   # only if you enable tls_impersonate
+```
 
 ## v7 highlights (still in)
 
@@ -200,6 +220,14 @@ python3 -m playwright install chromium
 | `POST /api/v1/osint/corporate` | SEC / Companies House / OpenCorporates / GitHub org |
 | `GET /api/v1/osint/graph` | Knowledge-graph snapshot |
 | `POST /api/v1/recon/fallback` | Lawful fallback tree |
+| `GET /api/v1/compliance/risk` | Operator notice (public) |
+| `GET /api/v1/compliance/risk/status` | Acknowledgment + capability flags |
+| `POST /api/v1/compliance/risk/acknowledge` | Phrase + `authorized_use` |
+| `POST /api/v1/compliance/risk/capabilities` | Per-option switches |
+| `POST /api/v1/compliance/risk/revoke` | Clear acknowledgment |
+| `POST /api/v1/recon/flaresolverr` | BYO FlareSolverr (403 until enabled) |
+| `POST /api/v1/osint/linkedin` | Unauthenticated LinkedIn GET (403 until enabled) |
+| `POST /api/v1/osint/github-emails` | Public commit author emails (403 until enabled) |
 | `GET /api/v1/playbook` | Feature Inspector catalog |
 | `GET /api/v1/copilot/context` | Scan / pheromone / obstacle context |
 | `POST /api/v1/copilot` | Action copilot (tools + synthesis) |
@@ -257,9 +285,10 @@ python3 run_app.py
 - [x] Lawful fallback tree (RSS, RDAP, Wayback, Common Crawl)
 - [x] Feature Inspector playbook
 - [x] Generated admin secret (no shipped default)
+- [x] Operator risk gate (opt-in FlareSolverr / TLS impersonate / fingerprints / LinkedIn / GitHub emails)
 - [ ] Optional allow-list of scrape hosts for locked-down deployments
 
-**Not on the roadmap (by design):** Cloudflare challenge bypass, JA3/canvas spoofing, LinkedIn scraping, GitHub commit-mail harvesting.
+**Not shipped as always-on (by design):** Cloudflare challenge bypass, canvas-noise anti-detect, LinkedIn login bypass, GitHub-wide email harvesting. Those exist only behind the operator risk gate, off by default.
 
 ## Лиценз
 

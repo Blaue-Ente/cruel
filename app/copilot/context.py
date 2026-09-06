@@ -24,6 +24,9 @@ def get_runtime_context() -> dict[str, Any]:
     obstacles = modes.get("recent_failures") or []
     llm = get_llm_status()
     apex = get_last_apex_run()
+    from app.compliance.risk_gate import get_status as get_risk_status
+
+    risk = get_risk_status()
     return {
         "version": APP_VERSION,
         "privacy_layer": DEFAULT_PRIVACY_LAYER,
@@ -56,6 +59,11 @@ def get_runtime_context() -> dict[str, Any]:
             if apex
             else None
         ),
+        "risk": {
+            "acknowledged": risk["acknowledged"],
+            "any_enabled": risk["any_enabled"],
+            "capabilities": risk["capabilities"],
+        },
     }
 
 
@@ -72,6 +80,7 @@ def context_prompt_block() -> str:
         f"- last_scan={last.get('mode')} {str(last.get('url') or '')[:80]} ok={last.get('success')}",
         f"- pheromones={len(pher)} backend={(ctx.get('pheromone_backend') or {}).get('backend')}",
         f"- obstacles={len(obstacles)}",
+        f"- risk_ack={(ctx.get('risk') or {}).get('acknowledged')} high_risk={(ctx.get('risk') or {}).get('any_enabled')}",
     ]
     for item in pher[:4]:
         lines.append(f"  pheromone {item.get('ptype')} {item.get('url_pattern')}")

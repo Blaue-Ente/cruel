@@ -544,6 +544,32 @@
             </div>
           </div>
         </div>
+        <div class="card" style="margin-top:1rem">
+          <div class="card-header">High-risk fetches (off until Settings notice)</div>
+          <div class="card-body">
+            <p class="muted-sm" style="margin-bottom:1rem">
+              These stay disabled until you read the operator notice in Settings, type the acceptance phrase, and enable the matching switch. APIs return 403 otherwise. You accept all liability.
+            </p>
+            <label>FlareSolverr target URL</label>
+            <div class="row">
+              <input type="url" id="risk-fs-url" placeholder="https://example.com" />
+              <button class="btn btn-secondary" id="btn-risk-fs" type="button">Fetch via FlareSolverr</button>
+            </div>
+            <label>LinkedIn public URL (no login bypass)</label>
+            <div class="row">
+              <input type="url" id="risk-li-url" placeholder="https://www.linkedin.com/in/..." />
+              <button class="btn btn-secondary" id="btn-risk-li" type="button">Public fetch</button>
+            </div>
+            <label>GitHub repo (public commit author emails)</label>
+            <div class="row">
+              <input type="text" id="risk-gh-owner" placeholder="owner" />
+              <input type="text" id="risk-gh-repo" placeholder="repo" />
+              <input type="url" id="risk-gh-url" placeholder="https://github.com/owner/repo" />
+              <button class="btn btn-secondary" id="btn-risk-gh" type="button">Commit emails</button>
+            </div>
+            <pre id="risk-ops-result" class="json-view" style="margin-top:1rem;max-height:280px">// 403 until the matching option is on</pre>
+          </div>
+        </div>
       </section>
 
       <!-- PRIVACY LAYERS -->
@@ -667,6 +693,22 @@
             </div>
           </div>
           <div class="card">
+            <div class="card-header">High-risk operator options</div>
+            <div class="card-body">
+              <div id="risk-status-line" class="muted-sm" style="margin-bottom:.75rem">All high-risk options are off until you read and accept the notice.</div>
+              <button class="btn btn-secondary" id="btn-risk-notice" type="button">Read notice &amp; accept risk</button>
+              <div id="risk-toggles" class="hidden" style="margin-top:1rem">
+                <div class="toggle-row"><input type="checkbox" id="risk-flaresolverr" /><label for="risk-flaresolverr" style="margin:0">FlareSolverr (BYO instance)</label></div>
+                <div class="toggle-row"><input type="checkbox" id="risk-tls" /><label for="risk-tls" style="margin:0">TLS/JA3 impersonation (curl_cffi)</label></div>
+                <div class="toggle-row"><input type="checkbox" id="risk-fingerprint" /><label for="risk-fingerprint" style="margin:0">Canvas / WebGL / Audio profiles</label></div>
+                <div class="toggle-row"><input type="checkbox" id="risk-linkedin" /><label for="risk-linkedin" style="margin:0">LinkedIn public fetch (no login bypass)</label></div>
+                <div class="toggle-row"><input type="checkbox" id="risk-github" /><label for="risk-github" style="margin:0">GitHub public commit emails</label></div>
+                <button class="btn btn-primary" id="btn-risk-save-caps" type="button">Save high-risk switches</button>
+                <button class="btn btn-danger" id="btn-risk-revoke" type="button">Revoke acknowledgment</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
             <div class="card-header">LLM Provider</div>
             <div class="card-body">
               <div class="provider-card active">
@@ -749,6 +791,24 @@
       </div>
       <p class="muted-sm" id="playbook-stance"></p>
       <div id="playbook-list" class="playbook-list"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="risk-overlay">
+    <div class="playbook-card">
+      <div class="playbook-head">
+        <h3>Operator risk notice</h3>
+        <button class="icon-btn" id="btn-risk-close" type="button">✕</button>
+      </div>
+      <pre id="risk-notice-text" class="risk-notice"></pre>
+      <div class="toggle-row">
+        <input type="checkbox" id="risk-authorized" />
+        <label for="risk-authorized" style="margin:0">I have a lawful basis / authorized use and accept all liability</label>
+      </div>
+      <label>Type <code>I ACCEPT THE RISK</code> or <code>ПРИЕМАМ РИСКА</code></label>
+      <input type="text" id="risk-phrase" autocomplete="off" />
+      <p class="muted-sm">Switches stay off until you enable them after this step.</p>
+      <button class="btn btn-primary" id="btn-risk-accept" type="button">Accept and continue</button>
     </div>
   </div>
 

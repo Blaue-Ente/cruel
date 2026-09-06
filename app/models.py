@@ -234,6 +234,31 @@ class LawfulFallbackRequest(BaseModel):
     url: HttpUrl
 
 
+class RiskAcknowledgeRequest(BaseModel):
+    phrase: str = Field(..., min_length=1, max_length=80)
+    authorized_use: bool = False
+    capabilities: dict[str, bool] = Field(default_factory=dict)
+
+
+class RiskCapabilitiesRequest(BaseModel):
+    capabilities: dict[str, bool] = Field(default_factory=dict)
+
+
+class FlareSolverrRequest(BaseModel):
+    url: HttpUrl
+
+
+class LinkedInFetchRequest(BaseModel):
+    url: HttpUrl
+
+
+class GithubEmailsRequest(BaseModel):
+    owner: str = ""
+    repo: str = ""
+    url: str = ""
+    limit: int = Field(default=20, ge=1, le=30)
+
+
 class GdprScanRequest(BaseModel):
     text: str
     privacy_layer: Optional[str] = None

@@ -56,7 +56,7 @@ ENTRIES: list[dict[str, Any]] = [
         "summary": "When live DOM is blocked: RSS/Atom, sitemap/JSON-LD, CDN hosts, RDAP, DNS TXT, Wayback, Common Crawl.",
         "use_when": "403/captcha/empty page — you still need public evidence.",
         "expected": "winning_method plus per-method findings.",
-        "legal": "Passive public sources only. ArgosScout does not spoof TLS/JA3, canvas, or solve challenges.",
+        "legal": "Passive public sources first. FlareSolverr / TLS impersonate run only after the operator risk gate.",
         "outputs": ["rss", "rdap", "wayback", "common_crawl"],
     },
     {
@@ -106,7 +106,7 @@ ENTRIES: list[dict[str, Any]] = [
         "summary": "Bezier mouse paths, variable typing cadence, scroll pauses, and tiny viewport nudges during authorized Playwright sessions.",
         "use_when": "Vision scrape on a site that expects a real viewport — not to defeat bot management.",
         "expected": "More complete screenshots on ordinary pages.",
-        "legal": "Human-like cadence for pages you may browse. Not fingerprint spoofing (no canvas/WebGL/JA3 noise).",
+        "legal": "Human-like cadence. Canvas/WebGL profile overrides require the fingerprint_profiles risk option.",
         "outputs": ["screenshot"],
     },
     {
@@ -126,7 +126,7 @@ ENTRIES: list[dict[str, Any]] = [
         "summary": "SEC EDGAR search, Companies House (API or search URL), OpenCorporates, GitHub public org metadata, careers-page signals, HTML tech-stack.",
         "use_when": "Company due diligence from public registries.",
         "expected": "Filings/search URLs, stack signatures, hiring page hits.",
-        "legal": "Public APIs and search URLs. No Handelsregister paid scrape, no login walls.",
+        "legal": "Public APIs and search URLs. GitHub commit emails require the operator risk option.",
         "outputs": ["registries", "stack", "hiring"],
     },
     {
@@ -136,7 +136,7 @@ ENTRIES: list[dict[str, Any]] = [
         "summary": "Wikipedia summary, GitHub public user, news search, LinkedIn search URL.",
         "use_when": "Public professional context for a named person already in the news or Wikipedia.",
         "expected": "Public snippets and search links — not a dossier of private emails.",
-        "legal": "No LinkedIn scraping, no GitHub commit-email harvesting, no stalking of private individuals.",
+        "legal": "LinkedIn scrape and GitHub commit-email harvest stay off until the operator reads the notice, types the phrase, and enables those options. No stalking of private individuals.",
         "outputs": ["wikipedia", "github", "news", "linkedin_search"],
     },
     {
@@ -149,6 +149,66 @@ ENTRIES: list[dict[str, Any]] = [
         "legal": "Keys stay on your host. Never paste secrets into Copilot chat.",
         "outputs": ["routing.light", "routing.reasoning"],
     },
+    {
+        "id": "risk_gate",
+        "name": "Operator risk gate",
+        "category": "compliance",
+        "summary": "All high-risk options are off until you read the notice, confirm authorized use, type I ACCEPT THE RISK, and enable each switch.",
+        "use_when": "You have a lawful basis and need FlareSolverr, TLS impersonation, fingerprint profiles, LinkedIn public fetch, or GitHub commit emails.",
+        "expected": "Per-capability flags in Settings. APIs return 403 until the matching flag is on.",
+        "legal": "You accept all liability. These options can violate site terms or GDPR if misused. Revoke anytime.",
+        "outputs": ["acknowledged", "capabilities"],
+    },
+    {
+        "id": "flaresolverr",
+        "name": "FlareSolverr (BYO)",
+        "category": "high-risk",
+        "summary": "Forwards a URL to YOUR FlareSolverr instance. ArgosScout does not include a Cloudflare solver.",
+        "use_when": "You run FlareSolverr locally and are allowed to fetch the target.",
+        "expected": "HTML from the sidecar, or an error if the instance is down.",
+        "legal": "Authorized hosts only. Enabling this does not grant extra rights against third-party sites.",
+        "outputs": ["html_preview", "status"],
+    },
+    {
+        "id": "tls_impersonate",
+        "name": "TLS/JA3 impersonation",
+        "category": "high-risk",
+        "summary": "Optional curl_cffi Chrome TLS profile for GET. pip install curl_cffi.",
+        "use_when": "Authorized testing against TLS fingerprint blocks.",
+        "expected": "Status and HTML preview via impersonated client.",
+        "legal": "Not a WAF exploit. Still SSRF-gated. Authorized use only.",
+        "outputs": ["status", "impersonate"],
+    },
+    {
+        "id": "fingerprint_profiles",
+        "name": "Canvas / WebGL / Audio profiles",
+        "category": "high-risk",
+        "summary": "Playwright init script aligns platform, WebGL vendor/renderer, and AudioContext with the UA. No canvas noise.",
+        "use_when": "Vision scrape on a property you may browse that inspects navigator/WebGL.",
+        "expected": "Same screenshot pipeline with a coherent profile applied.",
+        "legal": "Not a full anti-detect kit and not a challenge solver.",
+        "outputs": ["init_script"],
+    },
+    {
+        "id": "linkedin_fetch",
+        "name": "LinkedIn public fetch",
+        "category": "high-risk",
+        "summary": "Unauthenticated GET of a LinkedIn URL. Login walls and 999 stop the attempt.",
+        "use_when": "You have a lawful basis and only need public HTML/JSON-LD.",
+        "expected": "Title and JSON-LD if the page is actually public; otherwise blocked.",
+        "legal": "LinkedIn terms generally prohibit scraping. No session, no stealth login.",
+        "outputs": ["title", "json_ld_preview"],
+    },
+    {
+        "id": "github_commit_emails",
+        "name": "GitHub commit author emails",
+        "category": "high-risk",
+        "summary": "Reads author.email from the public commits API for a repo you name.",
+        "use_when": "Due diligence on a public repository you specify — not a person-hunt across GitHub.",
+        "expected": "Deduped name/email pairs, including noreply.github.com addresses.",
+        "legal": "Personal data. GDPR still applies. Do not build marketing or stalking lists.",
+        "outputs": ["authors"],
+    },
 ]
 
 
@@ -156,9 +216,11 @@ def get_playbook() -> dict[str, Any]:
     return {
         "title": "ArgosScout Feature Inspector",
         "stance": (
-            "ArgosScout is a privacy-first research OS. It does not implement Cloudflare "
-            "challenge solvers, JA3/canvas spoofing, or credential stuffing. When a live "
-            "page refuses inspection, use the lawful fallback tree."
+            "ArgosScout is a privacy-first research OS. High-risk options "
+            "(FlareSolverr sidecar, TLS impersonation, fingerprint profiles, "
+            "LinkedIn public fetch, GitHub commit emails) stay off until the operator "
+            "reads the notice, types the acceptance phrase, and enables each switch. "
+            "When a live page refuses inspection, prefer the lawful fallback tree."
         ),
         "entries": ENTRIES,
         "ids": [e["id"] for e in ENTRIES],

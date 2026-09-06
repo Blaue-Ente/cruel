@@ -1,33 +1,16 @@
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
-
 from app.copilot.engine import plan_with_rules, run_copilot
-from app.main import app
-from app.store import create_api_key, init_db
-
-
-@pytest.fixture(scope="module")
-def client():
-    init_db()
-    with TestClient(app) as c:
-        yield c
-
-
-@pytest.fixture
-def api_key():
-    init_db()
-    return create_api_key("test")["key"]
 
 
 def test_health_reports_v7_and_security(client):
     r = client.get("/health")
     assert r.status_code == 200
     body = r.json()
-    assert body["version"].startswith("7.")
+    assert body["version"].startswith("8.")
     assert body["security"]["ssrf_protection"] is True
     assert body["security"]["websocket_requires_api_key"] is True
+    assert body["security"]["admin_secret_insecure"] is False
     assert "X-Request-Id" in r.headers
     assert r.headers.get("X-Content-Type-Options") == "nosniff"
 

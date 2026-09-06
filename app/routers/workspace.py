@@ -5,10 +5,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.auth import require_api_key
+from app.copilot.context import get_runtime_context
 from app.copilot.engine import run_copilot
 from app.copilot.suggestions import build_suggestions
 from app.copilot.tools import public_tool_catalog
 from app.models import CopilotRequest, CopilotResponse, PreferencesUpdate, WorkspaceImport
+from app.playbook import get_playbook
 from app.preferences import export_workspace, import_workspace, load_preferences, save_preferences
 from app.store import get_mode_stats, get_recent_activity, log_telemetry
 
@@ -18,6 +20,16 @@ router = APIRouter(prefix="/api/v1", tags=["workspace"])
 @router.get("/copilot/tools")
 async def copilot_tools():
     return {"tools": public_tool_catalog()}
+
+
+@router.get("/copilot/context")
+async def copilot_context(_key: dict = Depends(require_api_key)):
+    return get_runtime_context()
+
+
+@router.get("/playbook")
+async def playbook():
+    return get_playbook()
 
 
 @router.post("/copilot", response_model=CopilotResponse)

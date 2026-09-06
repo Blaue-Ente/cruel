@@ -10,12 +10,13 @@
   <aside class="sidebar">
     <div class="brand">
       <h1><span>Argos</span>Scout</h1>
-      <p id="brand-tag">Ask a question. Get cited, compliant insight.</p>
+      <p id="brand-tag">Ask a question. Get a cited OSINT dossier.</p>
     </div>
     <nav class="nav">
       <div class="nav-group" data-i18n="nav_research">Research</div>
       <button class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span data-i18n="nav_dashboard">Dashboard</span></button>
       <button class="nav-item" data-page="agent"><span class="nav-icon">🔭</span><span>Argos Agent</span></button>
+      <button class="nav-item" data-page="apex"><span class="nav-icon">♛</span><span>Apex Master</span></button>
       <button class="nav-item" data-page="detective"><span class="nav-icon">🕵️</span><span>Smart Detective</span></button>
       <button class="nav-item" data-page="chat"><span class="nav-icon">🤖</span><span data-i18n="nav_chat">LLM Chat</span></button>
       <div class="nav-group" data-i18n="nav_extract">Extract</div>
@@ -46,8 +47,9 @@
         <button class="icon-btn" id="btn-copilot-toggle" title="Copilot">✦</button>
         <button class="icon-btn" id="btn-theme" title="Theme">◐</button>
         <button class="icon-btn" id="btn-locale" title="Language">EN</button>
+        <button class="icon-btn" id="btn-playbook" title="Feature Inspector">📘</button>
         <button class="icon-btn" id="btn-shortcuts" title="Shortcuts">?</button>
-        <span class="badge badge-green">v7.0</span>
+        <span class="badge badge-green">v8.0</span>
       </div>
     </header>
 
@@ -65,8 +67,8 @@
             <span><span class="kbd">Ctrl</span> <span class="kbd">K</span> command palette</span>
             <span><span class="kbd">Ctrl</span> <span class="kbd">J</span> copilot dock</span>
             <span class="chip" data-hero="Inspect system health and recommend fixes">Health check</span>
+            <span class="chip" data-hero="Apex dossier for example.com and its C-suite">Apex dossier</span>
             <span class="chip" data-hero="Explain the current privacy layer">Privacy layer</span>
-            <span class="chip" data-hero="https://example.com">Extract example.com</span>
           </div>
         </div>
 
@@ -95,22 +97,33 @@
 
         <div class="grid-2">
           <div class="card">
-            <div class="card-header">Scraper.io Capabilities</div>
+            <div class="card-header">Extraction strategies</div>
             <div class="card-body">
-              <pre id="dash-capabilities" class="json-view">Loading...</pre>
+              <div id="dash-strategies" class="chip-row">Loading…</div>
+              <table class="intel-table" id="dash-strategy-table">
+                <thead><tr><th>Strategy</th><th>Role</th></tr></thead>
+                <tbody></tbody>
+              </table>
             </div>
           </div>
           <div class="card">
-            <div class="card-header">LLM Status (NVIDIA / HuggingFace)</div>
+            <div class="card-header">BYOK LLM hub</div>
             <div class="card-body">
-              <pre id="dash-llm" class="json-view">Loading...</pre>
+              <div class="rings-row">
+                <div class="status-ring" id="ring-llm" data-state="warn"><span>LLM</span></div>
+                <div class="status-ring" id="ring-sec" data-state="ok"><span>SEC</span></div>
+                <div class="status-ring" id="ring-byok" data-state="warn"><span>BYOK</span></div>
+              </div>
+              <div id="dash-providers" class="pill-row"></div>
+              <div class="muted-sm" id="dash-routing">Routing: —</div>
             </div>
           </div>
         </div>
 
         <div class="alert alert-info" style="margin-top:1.25rem">
-          <strong>ArgosScout v7</strong> — privacy-first research OS. Copilot executes tools (research, scrape, Wayback, GDPR).
-          Free LLMs: <strong>Groq</strong> → NVIDIA → HuggingFace → Ollama.
+          <strong>ArgosScout v8 Apex</strong> — BYOK (OpenRouter / OpenAI / Anthropic / Groq / Ollama).
+          Lawful fallback when live DOM is blocked. Apex Master Mode builds a cited dossier.
+          No TLS/canvas spoofing, no LinkedIn scrape.
         </div>
 
         <div class="grid-2" style="margin-top:1.25rem">
@@ -165,6 +178,47 @@
                 <div class="msg msg-sys">Thought process ще се появи тук в реално време...</div>
               </div>
               <pre id="agent-result" class="json-view" style="max-height:200px">// Synthesis result</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- APEX MASTER -->
+      <section id="page-apex" class="page">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">♛ Apex Master Mode</div>
+            <div class="card-body">
+              <p class="muted-sm" style="margin-bottom:1rem">
+                One target. Planner decomposes it into registries, lawful fallback, people footprint, and archives.
+                Live Active Probe is never launched from here.
+              </p>
+              <div class="chips">
+                <span class="chip" data-apex="Company X and its C-suite">C-suite pack</span>
+                <span class="chip" data-apex="https://example.com public footprint">Domain footprint</span>
+                <span class="chip" data-apex="OpenAI corporate registry and hiring signals">Corporate</span>
+              </div>
+              <label>Target</label>
+              <textarea id="apex-target" placeholder="e.g. Acme GmbH and its C-suite"></textarea>
+              <div class="toggle-row">
+                <input type="checkbox" id="apex-people" checked />
+                <label for="apex-people" style="margin:0">People footprint</label>
+              </div>
+              <div class="toggle-row">
+                <input type="checkbox" id="apex-corporate" checked />
+                <label for="apex-corporate" style="margin:0">Registries + stack</label>
+              </div>
+              <div class="toggle-row">
+                <input type="checkbox" id="apex-archives" checked />
+                <label for="apex-archives" style="margin:0">Archives + fallback</label>
+              </div>
+              <button class="btn btn-primary" id="btn-apex-run">Build dossier</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">Dossier</div>
+            <div class="card-body" id="apex-dossier">
+              <div class="msg msg-sys">Run Apex to produce a cited intelligence pack.</div>
             </div>
           </div>
         </div>
@@ -564,7 +618,10 @@
             <div class="card-header">Автентикация</div>
             <div class="card-body">
               <label>Admin Secret (X-Admin-Secret)</label>
-              <input type="password" id="set-admin-secret" placeholder="cruel-admin-change-me" />
+              <input type="password" id="set-admin-secret" placeholder="paste from data/.admin_secret" />
+              <div id="admin-secret-hint" class="alert alert-info hidden" style="margin:.5rem 0">
+                A generated admin secret lives in <code>data/.admin_secret</code>. Paste it here — the shipped default is rejected.
+              </div>
               <label>API Key (X-API-Key)</label>
               <input type="password" id="set-api-key" placeholder="cruel_..." />
               <label>Theme</label>
@@ -613,31 +670,34 @@
             <div class="card-header">LLM Provider</div>
             <div class="card-body">
               <div class="provider-card active">
-                <div class="provider-title">Groq (препоръчано — 800+ tok/s)</div>
-                <div class="provider-desc">Безплатен на console.groq.com · Най-бърз LLM</div>
+                <div class="provider-title">OpenRouter (BYOK — Claude, DeepSeek, Llama, Gemini)</div>
+                <div class="provider-desc">One key at openrouter.ai · reasoning + light routing</div>
               </div>
               <div class="provider-card">
-                <div class="provider-title">NVIDIA NIM</div>
-                <div class="provider-desc">Безплатни модели на build.nvidia.com</div>
+                <div class="provider-title">Groq (fastest free tier)</div>
+                <div class="provider-desc">console.groq.com · light tasks</div>
               </div>
               <div class="provider-card">
-                <div class="provider-title">Ollama (локален SLM)</div>
-                <div class="provider-desc">Безплатен локален модел · ollama.com</div>
+                <div class="provider-title">Anthropic / OpenAI / Ollama</div>
+                <div class="provider-desc">Native Claude, GPT-4o, or local models</div>
               </div>
               <label>Provider</label>
               <select id="set-llm-provider">
-                <option value="auto">Auto (Groq → NVIDIA → HF → Ollama)</option>
-                <option value="groq">Groq (най-бърз)</option>
+                <option value="auto">Auto (task routing)</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="groq">Groq</option>
                 <option value="nvidia">NVIDIA NIM</option>
                 <option value="huggingface">Hugging Face</option>
-                <option value="ollama">Ollama (локален)</option>
-                <option value="rule">Rule-based (без LLM)</option>
+                <option value="ollama">Ollama (local)</option>
+                <option value="rule">Rule-based (no LLM)</option>
               </select>
               <label>Модел</label>
               <select id="set-llm-model"></select>
               <div class="alert alert-info" style="margin-top:.5rem">
-                NVIDIA: <code>NVIDIA_API_KEY</code> · Groq: <code>GROQ_API_KEY</code> ·
-                HF: <code>HF_TOKEN</code> · Ollama: локално на :11434
+                OpenRouter: <code>OPENROUTER_API_KEY</code> · OpenAI: <code>OPENAI_API_KEY</code> ·
+                Anthropic: <code>ANTHROPIC_API_KEY</code> · Groq: <code>GROQ_API_KEY</code>
               </div>
             </div>
           </div>
@@ -651,9 +711,10 @@
       <strong>Copilot</strong>
       <button class="icon-btn" id="btn-copilot-close" type="button">✕</button>
     </div>
+    <div id="copilot-context" class="copilot-ctx">Loading context…</div>
     <div class="copilot-body">
       <div id="copilot-messages" class="chat-box" style="height:auto;min-height:220px;margin:0">
-        <div class="msg msg-sys">I run tools: research, scrape, Wayback, SEO, GDPR, health, anomalies. Ask in English or Bulgarian.</div>
+        <div class="msg msg-sys">I run tools: Apex dossiers, research, scrape, Wayback, registries, GDPR, health. Ask in English or Bulgarian.</div>
       </div>
     </div>
     <div class="copilot-input">
@@ -674,8 +735,20 @@
       <h3>Keyboard shortcuts</h3>
       <div class="shortcut-row"><span>Command palette</span><span><span class="kbd">Ctrl</span> <span class="kbd">K</span></span></div>
       <div class="shortcut-row"><span>Toggle copilot</span><span><span class="kbd">Ctrl</span> <span class="kbd">J</span></span></div>
+      <div class="shortcut-row"><span>Feature Inspector</span><span><span class="kbd">Ctrl</span> <span class="kbd">I</span></span></div>
       <div class="shortcut-row"><span>This cheat sheet</span><span><span class="kbd">?</span></span></div>
       <div class="shortcut-row"><span>Close overlay</span><span><span class="kbd">Esc</span></span></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="playbook-overlay">
+    <div class="playbook-card">
+      <div class="playbook-head">
+        <h3>Feature Inspector & Arsenal Guide</h3>
+        <button class="icon-btn" id="btn-playbook-close" type="button">✕</button>
+      </div>
+      <p class="muted-sm" id="playbook-stance"></p>
+      <div id="playbook-list" class="playbook-list"></div>
     </div>
   </div>
 

@@ -105,6 +105,20 @@ async def detective_scrape(
             except Exception as e:
                 result["findings"]["semantic"] = {"error": str(e)}
 
+    if not result.get("success"):
+        result["methods_tried"].append("lawful_fallback")
+        try:
+            from app.recon.fallback import lawful_fallback
+
+            fallback = await asyncio.to_thread(lawful_fallback, url)
+            result["findings"]["lawful_fallback"] = fallback
+            if fallback.get("success"):
+                result["success"] = True
+                result["winning_method"] = f"fallback:{fallback.get('winning_method')}"
+                result["message"] = fallback.get("message") or result["message"]
+        except Exception as e:
+            result["findings"]["lawful_fallback"] = {"error": str(e)}
+
     if not result.get("message"):
         result["message"] = (
             f"Pipeline завърши ({len(result['methods_tried'])} метода). "

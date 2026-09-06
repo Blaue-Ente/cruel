@@ -1,13 +1,23 @@
-# ArgosScout v7 — Privacy-first Research OS
+# ArgosScout v8 — Autonomous OSINT & Deep Intelligence OS
 
-Self-hosted research workstation: ask a question, get a **cited, compliance-aware** answer. Copilot executes tools (search, extract, Wayback, GDPR) instead of chatting in circles.
+Self-hosted research workstation: ask a question, get a **cited, compliance-aware dossier**. Copilot executes tools (Apex, search, extract, Wayback, registries, GDPR) instead of chatting in circles.
 
 **North star:** time-to-trusted-insight — seconds from a prompt to sources you can defend.
 
-## v7 highlights
+## v8 Apex highlights
+
+- **BYOK LLM hub** — OpenRouter (Claude / DeepSeek / Llama / Mistral / Gemini), OpenAI, Anthropic, Groq, NVIDIA, Hugging Face, local Ollama. Light tasks (routing, extract) go to fast/cheap models; dossiers and plans use reasoning models with fallback.
+- **Apex Master Mode** — one target (`Company X and its C-suite`) → planner tree → cited forensic dossier, confidence, Person→Role→Company→Domain graph. Live Active Probe is never started from Apex.
+- **Lawful fallback tree** — if live DOM is blocked: RSS/Atom, sitemap/JSON-LD, CDN hosts, RDAP, DNS TXT, Wayback, Common Crawl. **Not implemented:** Cloudflare challenge solvers, JA3/JA4 spoofing, canvas/WebGL noise, FlareSolverr.
+- **Corporate + people OSINT** — SEC EDGAR, Companies House, OpenCorporates, GitHub **public** org/user APIs, HTML tech-stack, careers-page signals, Wikipedia, news. LinkedIn is a **search URL only**. No commit-email harvesting.
+- **Feature Inspector** (`Ctrl+I`) — human playbook for Swarm Pheromones, Provocative Stock, API Fuzz, Temporal Spoofing, Ghost Cursor, privacy layers, Apex.
+- **Dashboard** — status rings and provider pills instead of raw JSON dumps.
+- **Admin secret hygiene** — shipped default is rejected. Empty `ADMIN_SECRET` generates `data/.admin_secret` (mode 0600). Health reports `admin_secret_source`, never the secret.
+
+## v7 highlights (still in)
 
 - **Command-first UI** — dashboard prompt, `Ctrl+K` palette, `Ctrl+J` copilot dock, themes, EN/BG, workspace export/import
-- **Native copilot** — structured tools: `research`, `scrape`, `wayback`, `seo_autopsy`, `detective`, `gdpr_scan`, `inspect_health`, `spot_anomalies`
+- **Native copilot** — `research`, `scrape`, `wayback`, `seo_autopsy`, `detective`, `apex_run`, `corporate_intel`, `lawful_fallback`, `inspect_context`, `gdpr_scan`, `inspect_health`, `spot_anomalies`
 - **Zero-trust outbound fetch** — SSRF guards (private IPs, metadata, credential URLs, redirect re-check)
 - **Rate limits, request IDs, security headers**, WebSocket API key required
 - **Live probe** requires `authorized_target=true` (no silent live fuzzing)
@@ -24,7 +34,8 @@ Self-hosted research workstation: ask a question, get a **cited, compliance-awar
 | **DuckDuckGo** | — | Без API ключ | вградено |
 | **Wayback Machine** | — | Безплатен | archive.org |
 
-Auto priority: `Groq → NVIDIA → HuggingFace → Ollama → rule-based`
+Auto priority: **light** `Groq → OpenRouter → OpenAI → NVIDIA → Ollama` · **reasoning** `OpenRouter → Anthropic → OpenAI → Groq`
+
 
 ## Уникални функции
 
@@ -184,6 +195,13 @@ python3 -m playwright install chromium
 
 | Endpoint | Описание |
 |----------|----------|
+| `POST /api/v1/apex/run` | Apex Master Mode — cited public-source dossier |
+| `GET /api/v1/apex/last` | Last Apex dossier |
+| `POST /api/v1/osint/corporate` | SEC / Companies House / OpenCorporates / GitHub org |
+| `GET /api/v1/osint/graph` | Knowledge-graph snapshot |
+| `POST /api/v1/recon/fallback` | Lawful fallback tree |
+| `GET /api/v1/playbook` | Feature Inspector catalog |
+| `GET /api/v1/copilot/context` | Scan / pheromone / obstacle context |
 | `POST /api/v1/copilot` | Action copilot (tools + synthesis) |
 | `GET /api/v1/copilot/suggestions` | Proactive optimizations from logs/config |
 | `GET/PUT /api/v1/preferences` | Workspace preferences |
@@ -234,7 +252,14 @@ python3 run_app.py
 - [x] Native action copilot + command-first UI
 - [x] SSRF / rate-limit / request-id / WS auth
 - [x] Workspace preferences export/import
+- [x] BYOK LLM hub (OpenRouter / OpenAI / Anthropic) + light vs reasoning routing
+- [x] Apex Master Mode + knowledge graph
+- [x] Lawful fallback tree (RSS, RDAP, Wayback, Common Crawl)
+- [x] Feature Inspector playbook
+- [x] Generated admin secret (no shipped default)
 - [ ] Optional allow-list of scrape hosts for locked-down deployments
+
+**Not on the roadmap (by design):** Cloudflare challenge bypass, JA3/canvas spoofing, LinkedIn scraping, GitHub commit-mail harvesting.
 
 ## Лиценз
 

@@ -32,6 +32,7 @@ const I18N = {
 const PAGES = [
   { id: "dashboard", label: "Dashboard" },
   { id: "agent", label: "Argos Agent" },
+  { id: "apex", label: "Apex Master" },
   { id: "detective", label: "Smart Detective" },
   { id: "chat", label: "LLM Chat" },
   { id: "quick", label: "Quick Scrape" },
@@ -120,6 +121,8 @@ function showPage(id) {
   if (id === "stockargos") loadStockArgosSignals();
   if (id === "compliance") loadComplianceLayers();
   if (id === "detective" && $("det-country")) $("det-country").value = state.country;
+  if (id === "apex") loadLastApex();
+  loadCopilotContext();
 }
 
 async function loadHealth() {
@@ -137,7 +140,7 @@ async function loadHealth() {
       <div class="status-pill" style="margin-top:.35rem">
         <span class="dot ${scraperOk ? "ok" : "warn"}"></span> ScraperAPI
       </div>
-      ${insecure ? `<div class="status-pill" style="margin-top:.35rem"><span class="dot warn"></span> Default admin secret</div>` : ""}`;
+      ${insecure ? `<div class="status-pill" style="margin-top:.35rem"><span class="dot warn"></span> Insecure admin secret</div>` : `<div class="status-pill" style="margin-top:.35rem"><span class="dot ok"></span> Admin ${d.security?.admin_secret_source || "ok"}</div>`}`;
   } catch {
     $("sidebar-status").innerHTML = `<div class="status-pill"><span class="dot warn"></span> Offline</div>`;
   }
@@ -164,6 +167,7 @@ function handleSuggestion(action) {
   if (action === "open_settings") return showPage("settings");
   if (action === "open_detective") return showPage("detective");
   if (action === "open_agent") return showPage("agent");
+  if (action === "open_apex") return showPage("apex");
   if (action === "focus_command") {
     state.copilotDock = true;
     applyChrome();
@@ -192,14 +196,23 @@ async function loadDashboard() {
     $("stat-keys-sub").textContent = `${d.total_api_keys} total`;
     $("stat-scrapes").textContent = d.total_scrapes;
     $("stat-llm").textContent = d.llm?.provider || "rule_based";
-    $("stat-llm-sub").textContent = d.llm?.groq_configured ? "Groq ✓" : d.llm?.nvidia_configured ? "NVIDIA ✓" : d.llm?.hf_configured ? "HF ✓" : "Fallback";
+    const byok = ["openrouter_configured", "openai_configured", "anthropic_configured", "groq_configured", "nvidia_configured", "hf_configured"]
+      .filter((k) => d.llm?.[k]).length;
+    $("stat-llm-sub").textContent = byok ? `${byok} BYOK provider(s)` : "Rule fallback";
     $("stat-scraperio").textContent = d.scraperio?.strategies?.length || 0;
     $("stat-scraperio-sub").textContent = d.scraperio?.engine || "Scraper.io";
-    $("dash-capabilities").textContent = JSON.stringify(d.scraperio, null, 2);
-    $("dash-llm").textContent = JSON.stringify(d.llm, null, 2);
+    renderStrategies(d.scraperio);
+    renderLlmHub(d.llm);
   } catch (e) {
     console.error(e);
   }
+  try {
+    const h = await fetch("/health");
+    const health = await h.json();
+    renderSecurityRing(health);
+    const hint = $("admin-secret-hint");
+    if (hint && health.security?.admin_secret_source === "generated_file") hint.classList.remove("hidden");
+  } catch {}
   if (!state.apiKey) return;
   try {
     const [s, a] = await Promise.all([
@@ -217,6 +230,60 @@ async function loadDashboard() {
   } catch (e) {
     console.error(e);
   }
+}
+
+function renderStrategies(scraperio) {
+  const box = $("dash-strategies");
+  const tbody = $("dash-strategy-table")?.querySelector("tbody");
+  const strategies = scraperio?.strategies || scraperio?.available_strategies || [];
+  const names = Array.isArray(strategies)
+    ? strategies.map((s) => (typeof s === "string" ? s : s.name || s.id || JSON.stringify(s)))
+    : Object.keys(strategies);
+  if (box) {
+    box.innerHTML = names.length
+      ? names.map((n) => `<span class="strategy-chip">${n}</span>`).join("")
+      : '<span class="muted-sm">No strategies advertised</span>';
+  }
+  if (tbody) {
+    tbody.innerHTML = names.map((n) => `<tr><td>${n}</td><td>Fallback ladder</td></tr>`).join("");
+  }
+}
+
+function renderLlmHub(llm) {
+  const pills = $("dash-providers");
+  const routing = $("dash-routing");
+  const providers = [
+    ["openrouter", llm?.openrouter_configured],
+    ["openai", llm?.openai_configured],
+    ["anthropic", llm?.anthropic_configured],
+    ["groq", llm?.groq_configured],
+    ["nvidia", llm?.nvidia_configured],
+    ["hf", llm?.hf_configured],
+    ["ollama", true],
+  ];
+  if (pills) {
+    pills.innerHTML = providers.map(([name, on]) =>
+      `<span class="intel-pill ${on ? "on" : ""}">${name}</span>`
+    ).join("");
+  }
+  if (routing) {
+    const light = (llm?.routing?.light || []).join(" → ") || "rule";
+    const reason = (llm?.routing?.reasoning || []).join(" → ") || "rule";
+    routing.textContent = `Light: ${light} · Reasoning: ${reason}`;
+  }
+  const ring = $("ring-llm");
+  if (ring) ring.dataset.state = llm?.provider && llm.provider !== "rule_based" ? "ok" : "warn";
+  const byokRing = $("ring-byok");
+  if (byokRing) {
+    const n = providers.filter(([, on]) => on).length;
+    byokRing.dataset.state = n >= 2 ? "ok" : n === 1 ? "warn" : "bad";
+  }
+}
+
+function renderSecurityRing(health) {
+  const ring = $("ring-sec");
+  if (!ring) return;
+  ring.dataset.state = health.security?.admin_secret_insecure ? "bad" : "ok";
 }
 
 function addChatMsg(text, role) {
@@ -428,12 +495,21 @@ async function populateModels() {
     const d = await r.json();
     const sel = $("set-llm-model");
     sel.innerHTML = '<option value="">— default —</option>';
-    const prov = state.llmProvider === "huggingface" ? "hf" : state.llmProvider === "groq" ? "groq" : state.llmProvider === "ollama" ? "ollama" : "nvidia";
-    const models = prov === "groq" ? d.groq_models : prov === "hf" ? d.hf_models : prov === "ollama" ? d.ollama_models : d.nvidia_models;
+    const map = {
+      openrouter: d.openrouter_models,
+      openai: d.openai_models,
+      anthropic: d.anthropic_models,
+      groq: d.groq_models,
+      nvidia: d.nvidia_models,
+      huggingface: d.hf_models,
+      ollama: d.ollama_models,
+      auto: [...(d.openrouter_models || []), ...(d.groq_models || [])],
+    };
+    const models = map[state.llmProvider] || d.groq_models;
     (models || []).forEach((m) => {
       const opt = document.createElement("option");
       opt.value = m.id;
-      opt.textContent = m.name + (m.free ? " (free)" : "") + (m.speed ? ` · ${m.speed}` : "");
+      opt.textContent = m.name + (m.free ? " (free)" : "") + (m.tier ? ` · ${m.tier}` : "") + (m.speed ? ` · ${m.speed}` : "");
       sel.appendChild(opt);
     });
     if (state.llmModel) sel.value = state.llmModel;
@@ -773,12 +849,123 @@ async function runGdprScan() {
   $("gdpr-result").textContent = JSON.stringify(d, null, 2);
 }
 
+async function loadCopilotContext() {
+  const box = $("copilot-context");
+  if (!box) return;
+  if (!state.apiKey) {
+    box.textContent = "Save an API key to load scan context, pheromones, and obstacles.";
+    return;
+  }
+  try {
+    const r = await fetch("/api/v1/copilot/context", { headers: authHeaders() });
+    if (!r.ok) {
+      box.textContent = "Context unavailable.";
+      return;
+    }
+    const d = await r.json();
+    const last = d.last_scan ? `${d.last_scan.mode} ${d.last_scan.success ? "✓" : "✗"}` : "none";
+    const pher = (d.pheromones || []).length;
+    const obs = (d.obstacles || []).length;
+    box.innerHTML = `Layer <strong>${d.privacy_layer || "—"}</strong> · last ${last} · pheromones ${pher} · obstacles ${obs} · admin ${d.admin_secret_source}`;
+  } catch {
+    box.textContent = "Context offline.";
+  }
+}
+
+function renderDossier(d) {
+  const box = $("apex-dossier");
+  if (!box) return;
+  const findings = (d.key_findings || []).map((f) =>
+    `<tr><td>${f.claim || ""}</td><td>${f.confidence ?? ""}</td><td>${(f.citation_ids || []).join(", ")}</td></tr>`
+  ).join("");
+  const cites = (d.citations || []).map((c) =>
+    `<tr><td>${c.id}</td><td>${c.source}</td><td>${c.ok ? "✓" : "—"}</td><td>${(c.url || "").slice(0, 72)}</td></tr>`
+  ).join("");
+  const edges = ((d.graph || {}).edges || []).slice(0, 12).map((e) =>
+    `<tr><td>${e.rel}</td><td>${(e.src || "").slice(0, 8)}</td><td>${(e.dst || "").slice(0, 8)}</td><td>${e.confidence ?? ""}</td></tr>`
+  ).join("");
+  box.innerHTML = `
+    <div class="dossier-kicker">confidence ${d.confidence ?? "—"} · ${d.success ? "evidence found" : "gaps remain"} · probe ${d.live_probe_ran ? "ran" : "not used"}</div>
+    <div class="dossier-headline">${d.headline || d.target || "Dossier"}</div>
+    <p class="muted-sm">${d.executive_summary || ""}</p>
+    <h4 style="margin:1rem 0 .4rem">Findings</h4>
+    <table class="intel-table"><thead><tr><th>Claim</th><th>Conf.</th><th>Cite</th></tr></thead><tbody>${findings || "<tr><td colspan=3>None yet</td></tr>"}</tbody></table>
+    <h4 style="margin:1rem 0 .4rem">Citations</h4>
+    <table class="intel-table"><thead><tr><th>#</th><th>Source</th><th>OK</th><th>URL</th></tr></thead><tbody>${cites || "<tr><td colspan=4>—</td></tr>"}</tbody></table>
+    <h4 style="margin:1rem 0 .4rem">Graph edges</h4>
+    <table class="intel-table"><thead><tr><th>Rel</th><th>From</th><th>To</th><th>Conf.</th></tr></thead><tbody>${edges || "<tr><td colspan=4>No edges yet</td></tr>"}</tbody></table>
+    <p class="muted-sm" style="margin-top:.8rem">${(d.gaps || []).join(" · ")}</p>
+  `;
+}
+
+async function runApex() {
+  if (!state.apiKey) return alert(t("need_key"));
+  const target = $("apex-target").value.trim();
+  if (!target) return;
+  $("apex-dossier").innerHTML = '<div class="msg msg-sys">Apex planner running public-source steps…</div>';
+  try {
+    const r = await fetch("/api/v1/apex/run", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        target,
+        include_people: $("apex-people").checked,
+        include_corporate: $("apex-corporate").checked,
+        include_archives: $("apex-archives").checked,
+        llm_provider: state.llmProvider !== "auto" ? state.llmProvider : null,
+        privacy_layer: state.privacyLayer || null,
+        country: state.country || null,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Apex failed");
+    renderDossier(d);
+    loadCopilotContext();
+  } catch (e) {
+    $("apex-dossier").innerHTML = `<div class="msg msg-sys">Error: ${e.message}</div>`;
+  }
+}
+
+async function loadLastApex() {
+  if (!state.apiKey) return;
+  try {
+    const r = await fetch("/api/v1/apex/last", { headers: authHeaders() });
+    if (!r.ok) return;
+    renderDossier(await r.json());
+  } catch {}
+}
+
+async function openPlaybook() {
+  $("playbook-overlay").classList.add("open");
+  try {
+    const r = await fetch("/api/v1/playbook");
+    const d = await r.json();
+    $("playbook-stance").textContent = d.stance || "";
+    $("playbook-list").innerHTML = (d.entries || []).map((e) => `
+      <article class="playbook-item" data-id="${e.id}">
+        <div class="tag">${e.category}</div>
+        <h4>${e.name}</h4>
+        <p class="muted-sm">${e.summary}</p>
+        <p class="muted-sm"><strong>Use when:</strong> ${e.use_when}</p>
+        <p class="muted-sm"><strong>Expected:</strong> ${e.expected}</p>
+        <p class="muted-sm"><strong>Legal:</strong> ${e.legal}</p>
+      </article>`).join("");
+  } catch (e) {
+    $("playbook-list").textContent = "Could not load playbook.";
+  }
+}
+
+function closePlaybook() {
+  $("playbook-overlay")?.classList.remove("open");
+}
+
 function paletteItems(query) {
   const q = query.toLowerCase();
   const actions = [
     { id: "act-copilot", label: "Ask Copilot", run: () => { closePalette(); $("copilot-input").focus(); state.copilotDock = true; applyChrome(); } },
     { id: "act-health", label: "Inspect health", run: () => { closePalette(); runCopilot("Inspect system health"); } },
-    { id: "act-anomalies", label: "Spot anomalies", run: () => { closePalette(); runCopilot("What is failing?"); } },
+    { id: "act-apex", label: "Run Apex Master Mode", run: () => { closePalette(); showPage("apex"); $("apex-target")?.focus(); } },
+    { id: "act-playbook", label: "Open Feature Inspector", run: () => { closePalette(); openPlaybook(); } },
   ];
   return [
     ...PAGES.map((p) => ({ id: p.id, label: `Go to ${p.label}`, run: () => { closePalette(); showPage(p.id); } })),
@@ -910,6 +1097,12 @@ function init() {
   $("btn-detective").addEventListener("click", runDetective);
   $("btn-osint").addEventListener("click", runOsint);
   $("btn-gdpr-scan").addEventListener("click", runGdprScan);
+  $("btn-apex-run")?.addEventListener("click", runApex);
+  $("btn-playbook")?.addEventListener("click", openPlaybook);
+  $("btn-playbook-close")?.addEventListener("click", closePlaybook);
+  document.querySelectorAll(".chip[data-apex]").forEach((el) => {
+    el.addEventListener("click", () => { $("apex-target").value = el.dataset.apex; });
+  });
   document.querySelectorAll(".probe-mode").forEach((el) => {
     el.addEventListener("click", () => el.classList.toggle("active"));
   });
@@ -969,7 +1162,7 @@ function init() {
   $("btn-shortcuts").addEventListener("click", () => toggleShortcuts(true));
   $("palette-input").addEventListener("input", (e) => renderPalette(e.target.value));
   $("palette-overlay").addEventListener("click", (e) => { if (e.target.id === "palette-overlay") closePalette(); });
-  $("shortcuts-overlay").addEventListener("click", (e) => { if (e.target.id === "shortcuts-overlay") toggleShortcuts(false); });
+  $("playbook-overlay")?.addEventListener("click", (e) => { if (e.target.id === "playbook-overlay") closePlaybook(); });
   $("btn-export-workspace").addEventListener("click", exportWorkspace);
   $("import-workspace").addEventListener("change", (e) => {
     const file = e.target.files?.[0];
@@ -984,8 +1177,10 @@ function init() {
       state.copilotDock = !document.body.classList.contains("copilot-open");
       applyChrome();
     }
+    if (meta && e.key.toLowerCase() === "i") { e.preventDefault(); openPlaybook(); }
     if (e.key === "Escape") {
       closePalette();
+      closePlaybook();
       toggleShortcuts(false);
     }
     if (e.key === "?" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
@@ -1000,6 +1195,7 @@ function init() {
   populateModels();
   loadHealth();
   loadDashboard();
+  loadCopilotContext();
   showPage("dashboard");
 }
 

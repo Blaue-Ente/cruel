@@ -7,6 +7,7 @@ import re
 from typing import Any, Optional
 
 from app.config import COPILOT_MAX_TOOL_ROUNDS, DEFAULT_PRIVACY_LAYER
+from app.copilot.context import context_prompt_block
 from app.copilot.tools import TOOLS_BY_NAME, execute_tool, public_tool_catalog
 from app.providers import chat_complete, parse_json_from_text, resolve_provider
 
@@ -24,16 +25,20 @@ Schema:
 
 Rules:
 - Research / compare / find without a URL → research
+- Company / C-suite / domain dossier / Apex → apex_run
+- Corporate registries / EDGAR / Companies House → corporate_intel
+- Blocked page / RSS / RDAP / archives fallback → lawful_fallback
 - One page extract → scrape
 - History / changed / archive → wayback
 - Structured data / prices / schema → seo_autopsy or detective
 - PII / GDPR / email / phone in pasted text → gdpr_scan
 - Why is this failing / what is wrong → spot_anomalies
 - What can you do / status → inspect_health
+- Current scan, pheromones, obstacles → inspect_context
 - Privacy layer questions → explain_privacy_layer
 - After tools have run, set final=true and write a useful reply citing results
-- Never invent tool names. Never request probe/fuzz/exploit tools.
-- Refuse requests to attack, bypass auth, scan private IPs, or harvest personal data of private individuals.
+- Never invent tool names. Never request probe/fuzz/exploit/stealth tools.
+- Refuse requests to attack, bypass auth, scan private IPs, harvest personal data of private individuals, or scrape LinkedIn.
 """
 
 
@@ -100,6 +105,53 @@ def plan_with_rules(message: str, privacy_layer: str, country: str) -> dict[str,
                     "arguments": {"layer": privacy_layer, "country": country},
                 }
             ],
+            "final": False,
+        }
+
+    if any(w in lower for w in ("context", "pheromon", "obstacle", "какво е заредено", "what's loaded", "runtime")):
+        return {
+            "reply": reply("Reading scan context, pheromones, and obstacles…", "Чета контекста, феромоните и препятствията…"),
+            "tool_calls": [{"name": "inspect_context", "arguments": {}}],
+            "final": False,
+        }
+
+    if any(w in lower for w in ("apex", "dossier", "c-suite", "c suite", "master mode", "досие")):
+        return {
+            "reply": reply("Running Apex Master Mode…", "Стартирам Apex Master Mode…"),
+            "tool_calls": [
+                {
+                    "name": "apex_run",
+                    "arguments": {
+                        "target": message,
+                        "privacy_layer": privacy_layer,
+                        "country": country,
+                    },
+                }
+            ],
+            "final": False,
+        }
+
+    if any(w in lower for w in ("edgar", "companies house", "opencorporates", "corporate", "handelsregister")):
+        urls = _URL_RE.findall(message)
+        return {
+            "reply": reply("Checking public registries…", "Проверявам публични регистри…"),
+            "tool_calls": [
+                {
+                    "name": "corporate_intel",
+                    "arguments": {
+                        "name": message,
+                        "url": urls[0] if urls else "",
+                        "country": country,
+                    },
+                }
+            ],
+            "final": False,
+        }
+
+    if urls and any(w in lower for w in ("fallback", "rss", "rdap", "blocked", "captcha", "законен")):
+        return {
+            "reply": reply("Running lawful fallback tree…", "Стартирам законното fallback дърво…"),
+            "tool_calls": [{"name": "lawful_fallback", "arguments": {"url": urls[0]}}],
             "final": False,
         }
 
@@ -192,12 +244,13 @@ def plan_with_llm(
     }
     raw = chat_complete(
         [
-            {"role": "system", "content": SYSTEM_PROMPT + "\nTools:\n" + _catalog_for_prompt()},
+            {"role": "system", "content": SYSTEM_PROMPT + "\n" + context_prompt_block() + "\nTools:\n" + _catalog_for_prompt()},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)[:12000]},
         ],
         provider=provider,
         model=model,
         max_tokens=900,
+        task="route",
     )
     if not raw:
         return None
@@ -242,7 +295,9 @@ def _summarize_steps(message: str, steps: list[dict[str, Any]]) -> str:
                 lines.append("Recommendations:\n" + "\n".join(f"- {s['title']}: {s['detail']}" for s in sugg[:5]))
         elif name == "inspect_health":
             llm = (result.get("llm") or {}).get("provider")
-            lines.append(f"ArgosScout {result.get('version')} · LLM={llm} · admin_insecure={result.get('admin_secret_insecure')}")
+            lines.append(
+                f"ArgosScout {result.get('version')} · LLM={llm} · admin_source={result.get('admin_secret_source')} · insecure={result.get('admin_secret_insecure')}"
+            )
         elif name == "gdpr_scan":
             lines.append(result.get("summary") or f"PII findings: {result.get('scan_count')}")
         elif name == "scrape":
@@ -259,6 +314,21 @@ def _summarize_steps(message: str, steps: list[dict[str, Any]]) -> str:
             lines.append(f"Privacy layer: {layer}")
         elif name == "recent_activity":
             lines.append(f"{len(result.get('activity') or [])} recent jobs.")
+        elif name == "inspect_context":
+            last = result.get("last_scan") or {}
+            lines.append(
+                f"Context: last={last.get('mode')} pheromones={len(result.get('pheromones') or [])} obstacles={len(result.get('obstacles') or [])}"
+            )
+        elif name == "lawful_fallback":
+            lines.append(result.get("message") or f"Fallback via {result.get('winning_method')}")
+        elif name == "corporate_intel":
+            lines.append(f"Corporate intel for {result.get('subject')} — success={result.get('success')}")
+        elif name == "people_footprint":
+            lines.append(f"Public footprint for {result.get('subject')} — LinkedIn is a search URL only.")
+        elif name == "apex_run":
+            lines.append(
+                f"{result.get('headline') or 'Apex dossier'} (confidence {result.get('confidence')})\n{result.get('executive_summary') or ''}"
+            )
         else:
             lines.append(f"{name}: done")
     return "\n\n".join(lines)

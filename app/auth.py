@@ -20,8 +20,10 @@ async def require_api_key(x_api_key: Optional[str] = Security(api_key_header)) -
 
 
 async def require_admin(x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret")) -> None:
+    if admin_secret_is_insecure():
+        raise HTTPException(
+            status_code=403,
+            detail="Admin secret is insecure. Set ADMIN_SECRET or paste the generated value from data/.admin_secret.",
+        )
     if not x_admin_secret or not compare_digest(x_admin_secret, ADMIN_SECRET):
         raise HTTPException(status_code=403, detail="Invalid admin secret")
-    if admin_secret_is_insecure():
-        # Still allowed so first-run setup works, but callers can inspect health.
-        return

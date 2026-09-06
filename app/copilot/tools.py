@@ -29,6 +29,7 @@ def _truncate(value: Any, limit: int = 2500) -> Any:
 
 def tool_inspect_health() -> dict[str, Any]:
     from app.config import (
+        ADMIN_SECRET_SOURCE,
         APP_NAME,
         APP_VERSION,
         COMPLIANCE_COUNTRY,
@@ -51,6 +52,7 @@ def tool_inspect_health() -> dict[str, Any]:
         "version": APP_VERSION,
         "scraper_api_configured": bool(SCRAPER_API_KEY),
         "admin_secret_insecure": admin_secret_is_insecure(),
+        "admin_secret_source": ADMIN_SECRET_SOURCE,
         "llm": get_llm_status(),
         "scraperio": get_scraper_capabilities(),
         "vision": get_vision_capabilities(),
@@ -159,6 +161,65 @@ def tool_recent_activity(limit: int = 12) -> dict[str, Any]:
     from app.store import get_recent_activity
 
     return {"activity": get_recent_activity(limit)}
+
+
+def tool_inspect_context() -> dict[str, Any]:
+    from app.copilot.context import get_runtime_context
+
+    return get_runtime_context()
+
+
+def tool_lawful_fallback(url: str) -> dict[str, Any]:
+    from app.recon.fallback import lawful_fallback
+
+    ensure_safe_url(url)
+    return _truncate(lawful_fallback(url))
+
+
+def tool_corporate_intel(name: str = "", url: str = "", country: str = "") -> dict[str, Any]:
+    from app.osint.corporate import corporate_intel
+
+    if url:
+        ensure_safe_url(url)
+    return _truncate(corporate_intel(name=name, url=url, country=country))
+
+
+def tool_people_footprint(name: str, company: str = "") -> dict[str, Any]:
+    from app.osint.people import public_people_footprint
+
+    return _truncate(public_people_footprint(name, company=company))
+
+
+async def tool_apex_run(
+    target: str,
+    privacy_layer: str = "",
+    country: str = "",
+    include_people: bool = True,
+) -> dict[str, Any]:
+    import asyncio
+
+    from app.apex.orchestrator import run_apex
+
+    dossier = await asyncio.to_thread(
+        run_apex,
+        target,
+        privacy_layer=privacy_layer or None,
+        country=country or None,
+        include_people=include_people,
+    )
+    return {
+        "id": dossier.get("id"),
+        "target": dossier.get("target"),
+        "headline": dossier.get("headline"),
+        "executive_summary": dossier.get("executive_summary"),
+        "confidence": dossier.get("confidence"),
+        "key_findings": dossier.get("key_findings"),
+        "citations": dossier.get("citations"),
+        "gaps": dossier.get("gaps"),
+        "graph_counts": (dossier.get("graph") or {}).get("counts"),
+        "live_probe_ran": dossier.get("live_probe_ran"),
+        "success": dossier.get("success"),
+    }
 
 
 TOOL_SPECS: list[ToolSpec] = [
@@ -272,6 +333,63 @@ TOOL_SPECS: list[ToolSpec] = [
             "properties": {"limit": {"type": "integer"}},
         },
         handler=tool_recent_activity,
+    ),
+    ToolSpec(
+        name="inspect_context",
+        description="Inspect Copilot runtime context: last scan, pheromones, obstacles, BYOK routing, admin secret source.",
+        parameters={"type": "object", "properties": {}},
+        handler=tool_inspect_context,
+    ),
+    ToolSpec(
+        name="lawful_fallback",
+        description="When live DOM is blocked, collect RSS, sitemap/JSON-LD, RDAP, DNS TXT, Wayback, and Common Crawl.",
+        parameters={
+            "type": "object",
+            "properties": {"url": {"type": "string"}},
+            "required": ["url"],
+        },
+        handler=tool_lawful_fallback,
+    ),
+    ToolSpec(
+        name="corporate_intel",
+        description="Public company intel: SEC EDGAR, Companies House, OpenCorporates, GitHub org, site tech-stack.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "url": {"type": "string"},
+                "country": {"type": "string"},
+            },
+        },
+        handler=tool_corporate_intel,
+    ),
+    ToolSpec(
+        name="people_footprint",
+        description="Public professional footprint (Wikipedia, GitHub user, news). LinkedIn is a search URL only — no scrape.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "company": {"type": "string"},
+            },
+            "required": ["name"],
+        },
+        handler=tool_people_footprint,
+    ),
+    ToolSpec(
+        name="apex_run",
+        description="Apex Master Mode: plan a target (company/domain/C-suite) and return a cited public-source dossier. Does not run live probe.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "target": {"type": "string"},
+                "privacy_layer": {"type": "string"},
+                "country": {"type": "string"},
+                "include_people": {"type": "boolean"},
+            },
+            "required": ["target"],
+        },
+        handler=tool_apex_run,
     ),
 ]
 

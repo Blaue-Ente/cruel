@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from app.agent import run_agent, stream_agent_thoughts
 from app.auth import require_admin, require_api_key
 from app.config import (
+    ADMIN_SECRET_SOURCE,
     APP_NAME,
     APP_VERSION,
     BASE_DIR,
@@ -67,6 +68,9 @@ from app.models import (
     CommonCrawlRequest,
     OsintInvestigateRequest,
     GdprScanRequest,
+    ApexRequest,
+    CorporateIntelRequest,
+    LawfulFallbackRequest,
     DashboardStats,
     LLMCommandJSON,
     ScrapeRequest,
@@ -117,7 +121,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=APP_NAME,
-    description="ArgosScout — privacy-first research OS with an action copilot",
+    description="ArgosScout — autonomous OSINT research OS with BYOK copilot",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -160,6 +164,7 @@ async def health():
             "ssrf_protection": True,
             "rate_limiting": True,
             "admin_secret_insecure": admin_secret_is_insecure(),
+            "admin_secret_source": ADMIN_SECRET_SOURCE,
             "websocket_requires_api_key": True,
         },
     }
@@ -491,6 +496,60 @@ async def api_osint_investigate(body: OsintInvestigateRequest, _key: dict = Depe
         return result
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"OSINT investigation failed: {e}")
+
+
+@app.post("/api/v1/osint/corporate")
+async def api_osint_corporate(body: CorporateIntelRequest, _key: dict = Depends(require_api_key)):
+    from app.osint.corporate import corporate_intel
+
+    result = await asyncio.to_thread(corporate_intel, body.name, body.url, body.country)
+    log_scrape(body.name or body.url, "corporate", items_count=1, success=result.get("success", False))
+    return result
+
+
+@app.get("/api/v1/osint/graph")
+async def api_osint_graph(_key: dict = Depends(require_api_key)):
+    from app.osint.graph import snapshot
+
+    return snapshot()
+
+
+@app.post("/api/v1/recon/fallback")
+async def api_recon_fallback(body: LawfulFallbackRequest, _key: dict = Depends(require_api_key)):
+    from app.recon.fallback import lawful_fallback
+
+    result = await asyncio.to_thread(lawful_fallback, str(body.url))
+    log_scrape(str(body.url), "fallback", items_count=len(result.get("methods") or []), success=result.get("success", False))
+    return result
+
+
+@app.post("/api/v1/apex/run")
+async def api_apex_run(body: ApexRequest, _key: dict = Depends(require_api_key)):
+    from app.apex.orchestrator import run_apex
+
+    result = await asyncio.to_thread(
+        run_apex,
+        body.target,
+        privacy_layer=body.privacy_layer or DEFAULT_PRIVACY_LAYER,
+        country=body.country or COMPLIANCE_COUNTRY,
+        provider=body.llm_provider,
+        include_people=body.include_people,
+        include_corporate=body.include_corporate,
+        include_archives=body.include_archives,
+        include_live_probe=body.include_live_probe,
+    )
+    log_scrape(body.target[:100], "apex", items_count=len(result.get("citations") or []), success=result.get("success", False))
+    return result
+
+
+@app.get("/api/v1/apex/last")
+async def api_apex_last(_key: dict = Depends(require_api_key)):
+    from app.apex.orchestrator import last_apex
+
+    data = last_apex()
+    if not data:
+        raise HTTPException(status_code=404, detail="No Apex dossier yet")
+    return data
 
 
 # --- ArgosScout Agent ---

@@ -46,12 +46,20 @@ def capture_screenshot(url: str, width: int = 1280, height: int = 900) -> tuple[
     """Capture page screenshot. Returns (png_bytes, method)."""
     if PLAYWRIGHT_AVAILABLE:
         try:
+            from app.browser.profiles import playwright_context_kwargs
+            from app.probe.ghost_cursor import human_idle, human_scroll
+
+            kwargs = playwright_context_kwargs("desktop_chrome")
+            kwargs["viewport"] = {"width": width, "height": height}
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-                page = browser.new_page(viewport={"width": width, "height": height})
+                context = browser.new_context(**kwargs)
+                page = context.new_page()
                 page.goto(url, wait_until="networkidle", timeout=25000)
-                page.wait_for_timeout(1500)
+                human_idle(page, 200, 600)
+                human_scroll(page)
                 png = page.screenshot(full_page=False, type="png")
+                context.close()
                 browser.close()
                 return png, "playwright"
         except Exception:

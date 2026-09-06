@@ -89,7 +89,20 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_telemetry_created ON telemetry_events(created_at)"
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS apex_runs (
+                id TEXT PRIMARY KEY,
+                target TEXT NOT NULL,
+                dossier TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
+    from app.osint.graph import init_graph_tables
+
+    init_graph_tables()
 
 
 @contextmanager
@@ -382,3 +395,38 @@ def get_mode_stats(limit_hours: int = 24) -> dict[str, Any]:
         "total": sum(m["total"] for m in modes),
         "failures": sum(m["failures"] for m in modes),
     }
+
+
+def save_apex_run(run_id: str, target: str, dossier: dict[str, Any]) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO apex_runs (id, target, dossier, created_at) VALUES (?, ?, ?, ?)",
+            (
+                run_id,
+                (target or "")[:500],
+                json.dumps(dossier, ensure_ascii=False)[:500_000],
+                _utcnow().isoformat(),
+            ),
+        )
+        conn.commit()
+
+
+def get_last_apex_run() -> Optional[dict[str, Any]]:
+    try:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT id, target, dossier, created_at FROM apex_runs ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row:
+        return None
+    try:
+        payload = json.loads(row["dossier"])
+    except json.JSONDecodeError:
+        payload = {"raw": row["dossier"][:2000]}
+    if isinstance(payload, dict):
+        payload.setdefault("id", row["id"])
+        payload.setdefault("target", row["target"])
+        payload["saved_at"] = row["created_at"]
+    return payload

@@ -1,4 +1,6 @@
+import logging
 import os
+import secrets
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -13,12 +15,35 @@ DATABASE_PATH = Path(os.getenv("DATABASE_PATH", DATA_DIR / "cruel_app.db"))
 PREFERENCES_PATH = Path(os.getenv("PREFERENCES_PATH", DATA_DIR / "preferences.json"))
 
 APP_NAME = os.getenv("APP_NAME", "ArgosScout")
-APP_VERSION = os.getenv("APP_VERSION", "7.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "8.0.0")
 
 SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY", "")
 
-# LLM provider: auto | groq | nvidia | huggingface | ollama | rule
+# LLM provider: auto | openrouter | openai | anthropic | groq | nvidia | huggingface | ollama | rule
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto").lower()
+LLM_TASK_LIGHT = os.getenv("LLM_TASK_LIGHT", "light")
+LLM_TASK_REASONING = os.getenv("LLM_TASK_REASONING", "reasoning")
+
+# OpenRouter — one key for Claude, DeepSeek, Llama, Mistral, Gemini
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+OPENROUTER_MODEL_LIGHT = os.getenv("OPENROUTER_MODEL_LIGHT", "meta-llama/llama-3.3-70b-instruct")
+OPENROUTER_MODEL_REASONING = os.getenv(
+    "OPENROUTER_MODEL_REASONING", "anthropic/claude-3.5-sonnet"
+)
+OPENROUTER_HTTP_REFERER = os.getenv("OPENROUTER_HTTP_REFERER", "https://argoscout.local")
+OPENROUTER_APP_TITLE = os.getenv("OPENROUTER_APP_TITLE", "ArgosScout")
+
+# OpenAI
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+OPENAI_MODEL_LIGHT = os.getenv("OPENAI_MODEL_LIGHT", "gpt-4o-mini")
+OPENAI_MODEL_REASONING = os.getenv("OPENAI_MODEL_REASONING", "gpt-4o")
+
+# Anthropic (native Messages API)
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL_LIGHT = os.getenv("ANTHROPIC_MODEL_LIGHT", "claude-3-5-haiku-latest")
+ANTHROPIC_MODEL_REASONING = os.getenv("ANTHROPIC_MODEL_REASONING", "claude-3-5-sonnet-latest")
 
 # Groq — ultra-fast free tier (console.groq.com)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -61,6 +86,27 @@ OLLAMA_MODELS = [
     {"id": "llama3.2", "name": "Llama 3.2 (local)", "free": True},
     {"id": "phi3", "name": "Phi-3 (local)", "free": True},
     {"id": "gemma2", "name": "Gemma 2 (local)", "free": True},
+]
+
+OPENROUTER_MODELS = [
+    {"id": "anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet", "tier": "reasoning"},
+    {"id": "anthropic/claude-3.7-sonnet", "name": "Claude 3.7 Sonnet", "tier": "reasoning"},
+    {"id": "deepseek/deepseek-r1", "name": "DeepSeek R1", "tier": "reasoning"},
+    {"id": "deepseek/deepseek-chat", "name": "DeepSeek V3", "tier": "light"},
+    {"id": "meta-llama/llama-3.3-70b-instruct", "name": "Llama 3.3 70B", "tier": "light"},
+    {"id": "mistralai/mistral-large", "name": "Mistral Large", "tier": "reasoning"},
+    {"id": "google/gemini-pro-1.5", "name": "Gemini 1.5 Pro", "tier": "reasoning"},
+    {"id": "openai/gpt-4o-mini", "name": "GPT-4o mini (via OpenRouter)", "tier": "light"},
+]
+
+OPENAI_MODELS = [
+    {"id": "gpt-4o-mini", "name": "GPT-4o mini", "tier": "light"},
+    {"id": "gpt-4o", "name": "GPT-4o", "tier": "reasoning"},
+]
+
+ANTHROPIC_MODELS = [
+    {"id": "claude-3-5-haiku-latest", "name": "Claude 3.5 Haiku", "tier": "light"},
+    {"id": "claude-3-5-sonnet-latest", "name": "Claude 3.5 Sonnet", "tier": "reasoning"},
 ]
 
 # Agent limits
@@ -106,8 +152,46 @@ DEFAULT_PRIVACY_LAYER = os.getenv("DEFAULT_PRIVACY_LAYER", "standard").lower()
 COMPLIANCE_COUNTRY = os.getenv("COMPLIANCE_COUNTRY", "").upper()
 
 DEFAULT_ADMIN_SECRET = "cruel-admin-change-me"
-ADMIN_SECRET = os.getenv("ADMIN_SECRET", DEFAULT_ADMIN_SECRET)
-ALLOW_INSECURE_DEFAULTS = os.getenv("ALLOW_INSECURE_DEFAULTS", "true").lower() == "true"
+ALLOW_INSECURE_DEFAULTS = os.getenv("ALLOW_INSECURE_DEFAULTS", "false").lower() == "true"
+ADMIN_SECRET_FILE = DATA_DIR / ".admin_secret"
+
+# Optional public-registry keys (all lookups work as search-URL fallback without them)
+COMPANIES_HOUSE_API_KEY = os.getenv("COMPANIES_HOUSE_API_KEY", "")
+OPENCORPORATES_API_KEY = os.getenv("OPENCORPORATES_API_KEY", "")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+
+APEX_MAX_STEPS = int(os.getenv("APEX_MAX_STEPS", "8"))
+APEX_MAX_SOURCES = int(os.getenv("APEX_MAX_SOURCES", "6"))
+
+_log = logging.getLogger("argoscout")
+
+
+def _bootstrap_admin_secret() -> tuple[str, str]:
+    """Never keep the shipped default. Prefer env, then a generated file."""
+    env_val = os.getenv("ADMIN_SECRET", "").strip()
+    if env_val and env_val != DEFAULT_ADMIN_SECRET:
+        return env_val, "environment"
+    if ADMIN_SECRET_FILE.exists():
+        file_val = ADMIN_SECRET_FILE.read_text(encoding="utf-8").strip()
+        if file_val and file_val != DEFAULT_ADMIN_SECRET:
+            return file_val, "generated_file"
+    generated = secrets.token_urlsafe(32)
+    try:
+        ADMIN_SECRET_FILE.write_text(generated + "\n", encoding="utf-8")
+        os.chmod(ADMIN_SECRET_FILE, 0o600)
+    except OSError:
+        _log.warning("Could not persist generated admin secret to %s", ADMIN_SECRET_FILE)
+        if ALLOW_INSECURE_DEFAULTS:
+            return DEFAULT_ADMIN_SECRET, "insecure_default"
+        return generated, "ephemeral"
+    _log.warning(
+        "Generated ADMIN_SECRET and wrote it to %s. Paste that value in Settings; do not use the shipped default.",
+        ADMIN_SECRET_FILE,
+    )
+    return generated, "generated_file"
+
+
+ADMIN_SECRET, ADMIN_SECRET_SOURCE = _bootstrap_admin_secret()
 
 APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("APP_PORT", "8000"))
@@ -126,4 +210,4 @@ RATE_LIMIT_ADMIN = int(os.getenv("RATE_LIMIT_ADMIN", "60"))
 
 
 def admin_secret_is_insecure() -> bool:
-    return not ADMIN_SECRET or ADMIN_SECRET == DEFAULT_ADMIN_SECRET
+    return (not ADMIN_SECRET) or ADMIN_SECRET == DEFAULT_ADMIN_SECRET or ADMIN_SECRET_SOURCE == "insecure_default"

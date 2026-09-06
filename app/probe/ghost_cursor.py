@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 import random
 from typing import Optional
 
@@ -45,6 +44,52 @@ def human_move(page: "Page", x: float, y: float, steps: int = 25) -> None:
             my += random.gauss(0, 0.8)
             page.mouse.move(mx, my)
             page.wait_for_timeout(random.randint(8, 25))
+    except Exception:
+        pass
+
+
+def human_scroll(page: "Page", distance: Optional[int] = None) -> None:
+    """Scroll with pauses — authorized browsing simulation, not anti-detect evasion."""
+    if not PLAYWRIGHT_AVAILABLE:
+        return
+    try:
+        delta = distance if distance is not None else random.randint(240, 640)
+        chunks = max(2, delta // random.randint(80, 140))
+        remaining = delta
+        for _ in range(chunks):
+            step = remaining if remaining < 90 else random.randint(60, 140)
+            page.mouse.wheel(0, step)
+            remaining -= step
+            page.wait_for_timeout(random.randint(80, 280))
+            if remaining <= 0:
+                break
+        page.wait_for_timeout(random.randint(120, 400))
+    except Exception:
+        pass
+
+
+def viewport_nudge(page: "Page") -> None:
+    if not PLAYWRIGHT_AVAILABLE:
+        return
+    try:
+        size = page.viewport_size or {"width": 1280, "height": 900}
+        dx = random.randint(-12, 12)
+        dy = random.randint(-8, 8)
+        page.set_viewport_size(
+            {
+                "width": max(1024, size["width"] + dx),
+                "height": max(640, size["height"] + dy),
+            }
+        )
+    except Exception:
+        pass
+
+
+def human_idle(page: "Page", ms_min: int = 200, ms_max: int = 900) -> None:
+    if not PLAYWRIGHT_AVAILABLE:
+        return
+    try:
+        page.wait_for_timeout(random.randint(ms_min, ms_max))
     except Exception:
         pass
 

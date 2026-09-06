@@ -8,6 +8,9 @@ from app.config import (
     GROQ_API_KEY,
     HF_TOKEN,
     NVIDIA_API_KEY,
+    OPENAI_API_KEY,
+    OPENROUTER_API_KEY,
+    ANTHROPIC_API_KEY,
     SCRAPER_API_KEY,
     admin_secret_is_insecure,
 )
@@ -26,18 +29,18 @@ def build_suggestions() -> dict[str, Any]:
                 "id": "insecure_admin",
                 "severity": "critical",
                 "title": "Replace the default admin secret",
-                "detail": "ADMIN_SECRET is still the shipped default. Anyone who can reach this host can mint API keys.",
+                "detail": "ADMIN_SECRET is still the shipped default. Set a secret or copy data/.admin_secret into Settings.",
                 "action": "open_settings",
             }
         )
 
-    if not any((GROQ_API_KEY, NVIDIA_API_KEY, HF_TOKEN)):
+    if not any((OPENROUTER_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, NVIDIA_API_KEY, HF_TOKEN)):
         suggestions.append(
             {
                 "id": "no_llm",
                 "severity": "warning",
                 "title": "No cloud LLM key configured",
-                "detail": "Copilot will use rule-based routing. Add GROQ_API_KEY for the fastest free-tier synthesis.",
+                "detail": "Add OPENROUTER_API_KEY (Claude/DeepSeek/Llama) or GROQ_API_KEY. Copilot otherwise uses rule-based routing.",
                 "action": "open_settings",
             }
         )
@@ -111,5 +114,5 @@ def build_suggestions() -> dict[str, Any]:
 
 def _unused_capabilities(mode_rows: list[dict[str, Any]]) -> list[str]:
     seen = {row["mode"] for row in mode_rows}
-    catalog = ["agent", "detective", "seo_autopsy", "wayback", "vision"]
+    catalog = ["agent", "detective", "seo_autopsy", "wayback", "vision", "apex"]
     return [name for name in catalog if name not in seen]

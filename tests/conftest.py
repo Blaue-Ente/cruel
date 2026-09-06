@@ -21,3 +21,23 @@ os.environ["SSRF_ALLOW_PRIVATE"] = "false"
 os.environ["RATE_LIMIT_ANONYMOUS"] = "1000"
 os.environ["RATE_LIMIT_AUTHENTICATED"] = "1000"
 os.environ["LLM_PROVIDER"] = "rule"
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.store import create_api_key, init_db
+
+
+@pytest.fixture(scope="module")
+def client():
+    init_db()
+    from app.main import app
+
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture
+def api_key():
+    init_db()
+    return create_api_key("test")["key"]

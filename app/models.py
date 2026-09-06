@@ -213,6 +213,27 @@ class OsintInvestigateRequest(BaseModel):
     llm_provider: Optional[str] = None
 
 
+class ApexRequest(BaseModel):
+    target: str = Field(..., min_length=2, max_length=500)
+    privacy_layer: Optional[str] = None
+    country: Optional[str] = None
+    llm_provider: Optional[str] = None
+    include_people: bool = True
+    include_corporate: bool = True
+    include_archives: bool = True
+    include_live_probe: bool = False
+
+
+class CorporateIntelRequest(BaseModel):
+    name: str = ""
+    url: str = ""
+    country: str = ""
+
+
+class LawfulFallbackRequest(BaseModel):
+    url: HttpUrl
+
+
 class GdprScanRequest(BaseModel):
     text: str
     privacy_layer: Optional[str] = None

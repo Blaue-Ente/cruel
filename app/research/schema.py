@@ -65,6 +65,71 @@ UNVERIFIED_BANNER = (
     "Непроверено: наличието на източник не потвърждава истинността на твърдението."
 )
 
+ANNEX_DISCLAIMER = (
+    "The following items are raw, unverified discovery traces collected from public web assets. "
+    "Presence in this annex does not establish factuality."
+)
+
+CLASSIFICATION = "INTERNAL USE / OSINT COMPLIANT"
+
+GRAPH_NODE_KINDS = (
+    "target",
+    "organization",
+    "person",
+    "host",
+    "identifier",
+    "artifact",
+)
+
+GRAPH_NODE_LABELS = {
+    "target": "Target",
+    "organization": "Organization",
+    "person": "Person",
+    "host": "Domain/Host",
+    "identifier": "Financial/Registry Identifier",
+    "artifact": "Public Artifact",
+}
+
+GRAPH_EDGE_TYPES = (
+    "owns",
+    "controls",
+    "employed_by",
+    "hosted_on",
+    "cites",
+    "shares_infrastructure",
+)
+
+GRAPH_LAYERS = {
+    "unverified": {
+        "stroke": "#f59e0b",
+        "dash": "6 4",
+        "opacity": 0.55,
+        "tooltip": "Unverified trace: extracted via {source}",
+    },
+    "verified": {
+        "stroke": "#10b981",
+        "dash": "none",
+        "opacity": 1.0,
+        "tooltip": "Verified: {count} independent citations",
+    },
+    "disputed": {
+        "stroke": "#ef4444",
+        "dash": "2 3",
+        "opacity": 0.9,
+        "tooltip": "Disputed or contradicted relation",
+    },
+}
+
+EXPORT_FORMATS = ("json", "markdown", "html")
+
+CHIP_INTENTS = (
+    "verify_subset",
+    "verify_top",
+    "query_registry",
+    "wayback_diff",
+    "inspect_obstacles",
+)
+
 INJECTION_MARKERS = (
     "ignore previous",
     "ignore all previous",

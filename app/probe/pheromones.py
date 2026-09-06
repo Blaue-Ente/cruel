@@ -51,7 +51,38 @@ def init_pheromone_table() -> None:
             """
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_pheromones_url ON pheromones(url_pattern)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pheromone_stats (
+                key TEXT PRIMARY KEY,
+                value INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
         conn.commit()
+
+
+def _bump_stat(key: str, amount: int = 1) -> None:
+    init_pheromone_table()
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO pheromone_stats (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = value + ?",
+            (key, amount, amount),
+        )
+        conn.commit()
+
+
+def _stat(key: str) -> int:
+    init_pheromone_table()
+    with get_connection() as conn:
+        row = conn.execute("SELECT value FROM pheromone_stats WHERE key = ?", (key,)).fetchone()
+    return int(row["value"]) if row else 0
+
+
+def record_avoided(url: str = "") -> None:
+    _bump_stat("avoided")
+    if url:
+        _bump_stat("hits")
 
 
 def deposit(url: str, ptype: PheromoneType, message: str = "", strength: float = 1.0, ttl_hours: int = 24) -> None:
@@ -62,6 +93,7 @@ def deposit(url: str, ptype: PheromoneType, message: str = "", strength: float =
         data = json.dumps({"type": ptype, "message": message, "strength": strength, "url": pattern})
         r.setex(key, timedelta(hours=ttl_hours), data)
         r.zadd("pheromones:log", {f"{ptype}:{pattern}:{_utcnow().isoformat()}": strength})
+        _bump_stat("deposits")
         return
 
     now = _utcnow()
@@ -72,6 +104,7 @@ def deposit(url: str, ptype: PheromoneType, message: str = "", strength: float =
             (pattern, ptype, message, strength, now.isoformat(), expires),
         )
         conn.commit()
+    _bump_stat("deposits")
 
 
 def check(url: str) -> Optional[dict]:
@@ -81,6 +114,7 @@ def check(url: str) -> Optional[dict]:
         raw = r.get(f"pheromone:{pattern}")
         if raw:
             data = json.loads(raw)
+            _bump_stat("hits")
             return {"type": data["type"], "message": data.get("message", ""), "strength": data.get("strength", 1.0), "backend": "redis"}
         return None
 
@@ -95,13 +129,17 @@ def check(url: str) -> Optional[dict]:
             (url, now),
         ).fetchone()
     if row:
+        _bump_stat("hits")
         return {"type": row["ptype"], "message": row["message"], "strength": row["strength"], "backend": "sqlite"}
     return None
 
 
 def should_avoid(url: str) -> bool:
     p = check(url)
-    return p is not None and p["type"] == "poison"
+    if p is not None and p["type"] == "poison":
+        _bump_stat("avoided")
+        return True
+    return False
 
 
 def list_pheromones(limit: int = 50) -> list[dict]:
@@ -125,6 +163,81 @@ def list_pheromones(limit: int = 50) -> list[dict]:
 
 def get_backend_status() -> dict:
     return {"backend": "redis" if use_redis() else "sqlite", "redis_url_configured": bool(REDIS_URL)}
+
+
+def count_active() -> int:
+    init_pheromone_table()
+    r = _get_redis()
+    if r:
+        try:
+            return sum(1 for _ in r.scan_iter("pheromone:*"))
+        except Exception:
+            return 0
+    now = _utcnow().isoformat()
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM pheromones WHERE expires_at IS NULL OR expires_at > ?",
+            (now,),
+        ).fetchone()
+    return int(row["n"] if row else 0)
+
+
+def pheromone_map(limit: int = 80) -> dict:
+    routes = list_pheromones(limit)
+    return {
+        "backend": get_backend_status(),
+        "routes": routes,
+        "active": count_active(),
+        "note": "Sweet routes were useful; poison routes are skipped on later crawls.",
+    }
+
+
+def flush_all() -> dict:
+    """Clear cached routes. Does not reset historical savings counters."""
+    init_pheromone_table()
+    flushed = 0
+    r = _get_redis()
+    if r:
+        try:
+            keys = list(r.scan_iter("pheromone:*"))
+            if keys:
+                r.delete(*keys)
+            r.delete("pheromones:log")
+            flushed = len(keys)
+        except Exception:
+            pass
+    with get_connection() as conn:
+        row = conn.execute("SELECT COUNT(*) AS n FROM pheromones").fetchone()
+        n = int(row["n"] if row else 0)
+        conn.execute("DELETE FROM pheromones")
+        conn.commit()
+        flushed = max(flushed, n)
+    return {"ok": True, "flushed": flushed, "backend": get_backend_status(), "stats_retained": True}
+
+
+def telemetry() -> dict:
+    init_pheromone_table()
+    active = count_active()
+    avoided = _stat("avoided")
+    deposits = _stat("deposits")
+    hits = _stat("hits")
+    brute = avoided + max(deposits, 1)
+    index = int(round(100 * avoided / brute)) if brute else 0
+    return {
+        "pheromones_active": active,
+        "mapped_routes": deposits,
+        "dead_end_caches": active,
+        "requests_avoided": avoided,
+        "cache_hits": hits,
+        "bandwidth_savings": {
+            "http_calls_skipped": avoided,
+            "estimated_tokens": avoided * 400,
+            "byok_cost_est": f"<${avoided * 0.002:.2f}" if avoided else "$0.00",
+            "note": "Estimate versus re-crawling known dead ends. Not a bill.",
+        },
+        "cost_efficiency_index": min(99, index),
+        "backend": get_backend_status(),
+    }
 
 
 def _url_pattern(url: str) -> str:

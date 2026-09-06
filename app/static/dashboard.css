@@ -581,3 +581,57 @@ html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before {
   body.copilot-open .main { margin-right: 0; }
   .copilot-dock { width: 100%; }
 }
+
+.graph-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .78rem; color: var(--muted); margin-bottom: .5rem; }
+.graph-legend .swatch {
+  display: inline-block; width: 1.4rem; height: 0; border-top: 2px solid; margin-right: .35rem; vertical-align: middle;
+}
+.graph-legend .layer-a { border-top-style: dashed; color: #f59e0b; border-color: #f59e0b; }
+.graph-legend .layer-b { border-top-style: solid; color: #10b981; border-color: #10b981; }
+.graph-legend .layer-d { border-top-style: dotted; color: #ef4444; border-color: #ef4444; }
+.graph-workspace {
+  position: relative; min-height: 540px;
+  background: radial-gradient(circle at 50% 45%, #141824 0%, #0b0d12 70%);
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+}
+#research-graph { width: 100%; height: 540px; display: block; }
+.graph-node { cursor: pointer; }
+.graph-node text { font-size: 11px; fill: var(--text); font-family: var(--font); pointer-events: none; }
+.graph-node .badge { font-size: 8px; letter-spacing: .04em; text-transform: uppercase; fill: var(--muted); }
+.graph-drawer {
+  position: absolute; top: 0; right: 0; width: min(340px, 92%); height: 100%;
+  background: rgba(17, 20, 28, .96); border-left: 1px solid var(--border);
+  padding: .85rem; overflow: auto;
+}
+.graph-drawer header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .6rem; }
+.graph-drawer .src { font-size: .78rem; color: var(--muted); margin: .45rem 0; word-break: break-all; }
+.telemetry-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .65rem; margin-bottom: .4rem;
+}
+.telemetry-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: .7rem .8rem;
+}
+.telemetry-card .kicker { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.telemetry-card .value { font-size: 1.35rem; font-weight: 700; margin-top: .15rem; }
+.telemetry-mini {
+  display: flex; gap: .8rem; flex-wrap: wrap; justify-content: center;
+  font-size: .72rem; color: var(--muted); max-width: 28rem;
+}
+.mission-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .45rem; }
+.mission-chip {
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  border-radius: 999px; padding: .28rem .7rem; font-size: .76rem; cursor: pointer;
+}
+.mission-chip:hover { border-color: var(--accent); }
+.chip-confirm {
+  border: 1px solid var(--warning); background: rgba(240, 192, 64, .08);
+  border-radius: 10px; padding: .55rem .7rem; font-size: .8rem; margin-bottom: .45rem;
+}
+.chip-confirm .row { margin-top: .4rem; }
+.copilot-card {
+  border: 1px solid var(--border); background: var(--surface-2); border-radius: 10px;
+  padding: .55rem .7rem; margin: .4rem 0; font-size: .82rem;
+}
+.diff-added { color: var(--success); }
+.diff-removed { color: var(--danger); }
+.diff-modified { color: var(--warning); }

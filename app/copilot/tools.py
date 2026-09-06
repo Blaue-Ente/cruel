@@ -246,6 +246,7 @@ def tool_research_discover(
         "banner": pack.get("banner"),
         "counts": pack.get("counts"),
         "unverified": True,
+        "mission": pack.get("mission"),
         "documents": [
             {"id": d["id"], "title": d["title"], "url": d["url"], "verification_status": d["verification_status"]}
             for d in (pack.get("documents") or [])[:12]
@@ -268,6 +269,43 @@ def tool_research_verify(
     if not task_id:
         return {"error": "No research task yet. Run Discovery first."}
     return run_verification(task_id, scope=scope or "entire", level=level or "analyze", ids=ids or None)
+
+
+def tool_research_chips(task_id: str = "") -> dict[str, Any]:
+    from app.research.mission import chips_for_task
+    from app.research.store import list_tasks
+
+    if not task_id:
+        tasks = list_tasks(1)
+        task_id = (tasks[0]["id"] if tasks else "")
+    if not task_id:
+        return {"error": "No research task yet. Run Discovery first."}
+    return chips_for_task(task_id)
+
+
+def tool_research_execute_chip(chip_id: str, task_id: str = "", confirmed: bool = False) -> dict[str, Any]:
+    from app.research.mission import execute_chip
+    from app.research.store import list_tasks
+
+    if not task_id:
+        tasks = list_tasks(1)
+        task_id = (tasks[0]["id"] if tasks else "")
+    if not task_id:
+        return {"error": "No research task yet. Run Discovery first."}
+    # Copilot never spends. Confirmation is an HTTP UI/API action on the stored chip.
+    result = execute_chip(task_id, chip_id, confirmed=False)
+    if confirmed:
+        result = {
+            **result,
+            "note": "Copilot cannot confirm spend. Use the action chip in the dock (forecast shown first).",
+        }
+    return result
+
+
+def tool_pheromone_telemetry() -> dict[str, Any]:
+    from app.probe.pheromones import pheromone_map, telemetry
+
+    return {"telemetry": telemetry(), "map": pheromone_map(20)}
 
 
 TOOL_SPECS: list[ToolSpec] = [
@@ -469,6 +507,35 @@ TOOL_SPECS: list[ToolSpec] = [
             },
         },
         handler=tool_research_verify,
+    ),
+    ToolSpec(
+        name="research_mission_chips",
+        description="List heuristic Copilot action chips for the current research task. Does not spend budget.",
+        parameters={
+            "type": "object",
+            "properties": {"task_id": {"type": "string"}},
+        },
+        handler=tool_research_chips,
+    ),
+    ToolSpec(
+        name="research_execute_chip",
+        description="Preview a stored mission chip. Copilot cannot confirm spend; the operator must confirm in the UI.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "chip_id": {"type": "string"},
+                "confirmed": {"type": "boolean"},
+            },
+            "required": ["chip_id"],
+        },
+        handler=tool_research_execute_chip,
+    ),
+    ToolSpec(
+        name="pheromone_telemetry",
+        description="Pheromone memory telemetry: mapped routes, skipped HTTP calls, cost-efficiency index.",
+        parameters={"type": "object", "properties": {}},
+        handler=tool_pheromone_telemetry,
     ),
 ]
 

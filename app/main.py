@@ -38,7 +38,14 @@ from app.predictive import (
     start_predictive_background,
 )
 from app.probe.orchestrator import get_probe_capabilities, run_active_probe
-from app.probe.pheromones import get_backend_status, init_pheromone_table, list_pheromones
+from app.probe.pheromones import (
+    flush_all as flush_pheromones,
+    get_backend_status,
+    init_pheromone_table,
+    list_pheromones,
+    pheromone_map,
+    telemetry as pheromone_telemetry,
+)
 from app.vision import get_vision_capabilities, vision_scrape
 from app.inbox import (
     get_inbox_messages,
@@ -77,6 +84,7 @@ from app.models import (
     FlareSolverrRequest,
     LinkedInFetchRequest,
     GithubEmailsRequest,
+    PheromoneFlushRequest,
     DashboardStats,
     LLMCommandJSON,
     ScrapeRequest,
@@ -191,6 +199,7 @@ async def health():
             "layers_enabled": RESEARCH_LAYERS_ENABLED,
             "local_only": RESEARCH_LOCAL_ONLY or LLM_PROVIDER in {"rule", "ollama"},
             "workflows": ["discover_only", "discover_then_verify"],
+            "executive_suite": True,
         },
     }
 
@@ -372,7 +381,24 @@ async def probe_capabilities():
 
 @app.get("/api/v1/probe/pheromones")
 async def probe_pheromones(_key: dict = Depends(require_api_key)):
-    return {"pheromones": list_pheromones(), "backend": get_backend_status()}
+    return {
+        "pheromones": list_pheromones(),
+        "backend": get_backend_status(),
+        "telemetry": pheromone_telemetry(),
+        "map": pheromone_map(),
+    }
+
+
+@app.get("/api/v1/probe/pheromones/telemetry")
+async def probe_pheromone_telemetry(_key: dict = Depends(require_api_key)):
+    return pheromone_telemetry()
+
+
+@app.post("/api/v1/probe/pheromones/flush")
+async def probe_pheromone_flush(body: PheromoneFlushRequest, _key: dict = Depends(require_api_key)):
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Set confirm=true to flush pheromone routes.")
+    return flush_pheromones()
 
 
 # --- Multimodal TikTok ---

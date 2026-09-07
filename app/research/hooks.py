@@ -8,12 +8,19 @@ from typing import Any
 def after_discovery(task_id: str) -> dict[str, Any]:
     from app.research.graph import rebuild_graph
     from app.research.mission import publish_chips
+    from app.research.reflection import reflect
     from app.research.snapshots import capture_snapshot
 
+    gaps = reflect(task_id)
     graph = rebuild_graph(task_id)
     snap = capture_snapshot(task_id, trigger="discovery")
     mission = publish_chips(task_id, "onDiscoveryComplete")
-    return {"graph_counts": graph.get("counts"), "snapshot_id": snap.get("id"), "mission": mission}
+    return {
+        "graph_counts": graph.get("counts"),
+        "snapshot_id": snap.get("id"),
+        "mission": mission,
+        "reflection": gaps,
+    }
 
 
 def after_verification(task_id: str) -> dict[str, Any]:

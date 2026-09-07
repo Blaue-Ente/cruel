@@ -69,6 +69,7 @@ def _record(task_id: str, action: str, **kwargs) -> dict[str, Any]:
 
 
 def _collectors() -> Collectors:
+    from app.osint.academic import academic_search
     from app.osint.corporate import corporate_intel
     from app.osint.people import public_people_footprint
     from app.recon.fallback import lawful_fallback
@@ -81,6 +82,7 @@ def _collectors() -> Collectors:
         "people": public_people_footprint,
         "fallback": lawful_fallback,
         "wayback": temporal_analysis,
+        "academic": academic_search,
     }
 
 
@@ -95,6 +97,9 @@ def run_discovery(
     custom_limits: Optional[dict[str, Any]] = None,
     collectors: Optional[Collectors] = None,
     urls: Optional[list[str]] = None,
+    skip_desks: Optional[list[str]] = None,
+    extra_loops: Optional[list[str]] = None,
+    desk: str = "",
 ) -> dict[str, Any]:
     if not RESEARCH_LAYERS_ENABLED:
         raise LayersDisabled("Dual-layer research is disabled (RESEARCH_LAYERS_ENABLED=false).")
@@ -114,7 +119,14 @@ def run_discovery(
         "ran": [],
         "blocked": [],
         "skipped": [],
-        "out_of_scope": ["social_full_firehose", "captcha_bypass", "active_probe"],
+        "out_of_scope": ["social_full_firehose", "captcha_bypass", "active_probe", "stealth_login", "credential_stuffing"],
+        "steering": {
+            "paused": False,
+            "skipped_desks": [d for d in (skip_desks or []) if d],
+            "extra_loops": [d for d in (extra_loops or []) if d],
+            "desk": desk or "",
+            "stage": "discovery",
+        },
     }
     store.update_task(task_id, status="running")
     store.add_event(task_id, "policy", "Access policy and budget envelope applied.")
@@ -150,7 +162,12 @@ def run_discovery(
             coverage["blocked"].append("search")
             store.add_event(task_id, "search", search_decision["reason"])
 
-        if budget.requests < limits["max_requests"]:
+        skipped_desks = {d.lower() for d in ((coverage.get("steering") or {}).get("skipped_desks") or [])}
+        extra_loops = {d.lower() for d in ((coverage.get("steering") or {}).get("extra_loops") or [])}
+
+        if "registry" in skipped_desks:
+            coverage["skipped"].append("registry")
+        elif budget.requests < limits["max_requests"]:
             reg = _record(task_id, "registry")
             if reg["allowed"]:
                 budget.consume(requests=1)
@@ -181,6 +198,37 @@ def run_discovery(
                     )
             else:
                 coverage["blocked"].append("registry")
+
+        want_academic = "academic" not in skipped_desks and (
+            mode in {"deep", "custom"} or "academic" in extra_loops or mode == "quick"
+        )
+        if want_academic and budget.requests < limits["max_requests"] and "academic" in tools:
+            academ = _record(task_id, "academic")
+            if academ["allowed"]:
+                budget.consume(requests=1)
+                store.add_event(task_id, "academic", "Collecting public OpenAlex / Crossref / arXiv traces.")
+                limit = 3 if mode == "quick" else 6
+                papers = tools["academic"](query, max_results=limit) or []
+                store.record_tool_run(task_id, "discovery", "academic_search", True, requests=1)
+                coverage["ran"].append("academic")
+                coverage["planned"] = list(dict.fromkeys([*(coverage.get("planned") or []), "academic"]))
+                for hit in papers:
+                    ingest_document(
+                        task_id,
+                        url=hit.get("url") or "",
+                        title=hit.get("title") or "",
+                        excerpt=hit.get("snippet") or hit.get("title") or "",
+                        source_type="academic",
+                        method=hit.get("source") or "academic",
+                        completeness="trace",
+                        is_snippet=True,
+                        errors="Academic hit is a bibliographic trace, not a verified claim.",
+                        meta={"venue": hit.get("venue"), "year": hit.get("year")},
+                    )
+            else:
+                coverage["blocked"].append("academic")
+        elif "academic" in skipped_desks:
+            coverage["skipped"].append("academic")
 
         target_url = next((u for u in found_urls if u.startswith("http")), "")
         if target_url and mode in {"deep", "custom"} and budget.requests < limits["max_requests"]:
@@ -313,6 +361,8 @@ def inbox(task_id: str, query: str = "", source_type: str = "") -> dict[str, Any
             "entities": entities,
             "events": store.list_events(task_id),
             "tool_runs": store.list_tool_runs(task_id),
+            "reflection": (task.get("coverage") or {}).get("reflection") or {"gaps": []},
+            "steering": (task.get("coverage") or {}).get("steering") or {},
             "counts": {
                 "documents": len(documents),
                 "claims": len(claims),

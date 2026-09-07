@@ -1,8 +1,12 @@
 """Operator risk gate — high-risk capabilities stay off until an informed opt-in.
 
 The operator must read the notice, confirm authorized use, type the acceptance
-phrase, then enable each capability. Nothing here is on by default. Revoking
-the acknowledgment turns every flag off.
+phrase, then enable each capability. High-risk *egress* also requires a
+Bring-Your-Own HTTP/SOCKS proxy. Nothing here is on by default. Revoking the
+acknowledgment turns every flag off and clears the proxy.
+
+ArgosScout does not ship exploits, stealth logins, or credential stuffing.
+Authorized surface enumeration maps public HTTP paths on a host you may test.
 """
 
 from __future__ import annotations
@@ -10,10 +14,11 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 from app.config import RISK_ACK_PATH
 
-NOTICE_VERSION = 1
+NOTICE_VERSION = 2
 ACK_PHRASES = ("I ACCEPT THE RISK", "ПРИЕМАМ РИСКА")
 
 CAPABILITIES = (
@@ -22,40 +27,66 @@ CAPABILITIES = (
     "fingerprint_profiles",
     "linkedin_public_fetch",
     "github_commit_emails",
+    "authorized_surface_enum",
 )
+
+# These talk to third-party hosts and must egress via the operator proxy.
+PROXY_REQUIRED = (
+    "tls_impersonate",
+    "linkedin_public_fetch",
+    "github_commit_emails",
+    "authorized_surface_enum",
+)
+
+PROXY_SCHEMES = ("http", "https", "socks4", "socks5", "socks5h")
 
 NOTICE_EN = """HIGH-RISK OPERATOR OPTIONS — READ BEFORE ENABLING
 
 These switches are off by default. Turning any of them on is your decision and
 your legal responsibility. ArgosScout’s authors do not authorize misuse.
 
+A Bring-Your-Own PROXY is required for options that contact third-party hosts
+(LinkedIn public GET, GitHub commit emails, TLS impersonation, authorized
+surface enumeration). Put the traffic through YOUR HTTP or SOCKS proxy
+(for example a local Tor client or a documented corporate egress). ArgosScout
+does not provide stealth infrastructure.
+
 1. FlareSolverr (Bring Your Own)
    Talks to a FlareSolverr instance YOU run (typically localhost:8191) to fetch
    a URL that served a bot challenge. ArgosScout does not ship a Cloudflare or
    Turnstile solver. You must have the right to fetch that host.
 
-2. TLS impersonation (optional curl_cffi)
-   Uses a Chrome-like TLS/JA3 client profile for outbound GET. This can evade
-   naive TLS fingerprint blocks. Use only on hosts you are allowed to test.
+2. TLS impersonation (optional curl_cffi) — requires proxy
+   Uses a Chrome-like TLS/JA3 client profile for outbound GET via your proxy.
+   This can evade naive TLS fingerprint blocks. Use only on hosts you are
+   allowed to test. Not a WAF exploit.
 
 3. Coherent browser fingerprints
    Aligns User-Agent, platform, WebGL vendor/renderer, and AudioContext with one
    hardware profile, and may hide navigator.webdriver. This is not a full
-   anti-detect pack (no canvas noise, no challenge solver).
+   anti-detect pack (no canvas noise, no challenge solver, no stealth login).
 
-4. LinkedIn public fetch
-   Attempts an unauthenticated GET of a public LinkedIn URL. Login walls, 999
-   blocks, and authenticated-only data are NOT bypassed. LinkedIn’s terms
-   generally prohibit scraping. Enable only if you have a lawful basis.
+4. LinkedIn public fetch — requires proxy
+   Attempts an unauthenticated GET of a public LinkedIn URL through YOUR proxy.
+   Login walls, 999 blocks, and authenticated-only data are NOT bypassed.
+   LinkedIn’s terms generally prohibit scraping. Enable only if you have a
+   lawful basis. No session theft.
 
-5. GitHub public commit author emails
-   Reads author.email from the public GitHub commits API for a repo YOU name.
-   Many addresses are users.noreply.github.com. This is personal data under
-   GDPR. Do not use it to compile marketing lists or stalk private individuals.
+5. GitHub public commit author emails — requires proxy
+   Reads author.email from the public GitHub commits API for a repo YOU name,
+   via your proxy. Many addresses are users.noreply.github.com. This is personal
+   data under GDPR. Named repository only — not a GitHub-wide person hunt, not
+   credential stuffing, not breach-list scraping.
 
-You confirm: you have authorization or another lawful basis; you will not attack
-third-party bot defenses, steal sessions, or harvest people at scale; you accept
-all liability. Type the phrase exactly, then enable individual options.
+6. Authorized surface enumeration — requires proxy AND authorized_target
+   Live Active Probe / HTTP path mapping on a host you confirm you may test.
+   Discovers same-origin /api paths from public HTML. No exploit payloads, no
+   auth bypass, no ransomware tooling. Dry-run stays available without this flag.
+
+You confirm: you have authorization or another lawful basis; the proxy is yours;
+you will not attack third-party bot defenses, steal sessions, or harvest people
+at scale; you accept all liability. Type the phrase exactly, then enable
+individual options.
 """
 
 NOTICE_BG = """ОПЦИИ С ВИСОК РИСК — ПРОЧЕТЕТЕ ПРЕДИ ВКЛЮЧВАНЕ
@@ -63,13 +94,19 @@ NOTICE_BG = """ОПЦИИ С ВИСОК РИСК — ПРОЧЕТЕТЕ ПРЕД
 По подразбиране всички ключове са изключени. Включването е ваше решение и
 ваша правна отговорност.
 
-1. FlareSolverr (свой инстанс) — ArgosScout не носи Cloudflare solver.
-2. TLS имитация (curl_cffi) — Chrome-подобен JA3 само към разрешени хостове.
-3. Съгласувани браузър профили — UA/WebGL/Audio; не е пълен anti-detect.
-4. LinkedIn публично теглене — без логин и без заобикаляне на стена.
-5. GitHub публични commit имейли — лични данни; само за посочено от вас хранилище.
+За опции към чужди хостове е задължителен ВАШ HTTP/SOCKS прокси.
+ArgosScout не дава stealth инфраструктура, не прави stealth login и не
+пълни credentals.
 
-Потвърждавате законно основание и приемате цялата отговорност.
+1. FlareSolverr (свой инстанс) — ArgosScout не носи Cloudflare solver.
+2. TLS имитация (curl_cffi) — през вашия прокси, само към разрешени хостове.
+3. Съгласувани браузър профили — UA/WebGL/Audio; не е пълен anti-detect.
+4. LinkedIn публично теглене — през прокси; без логин и без заобикаляне на стена.
+5. GitHub публични commit имейли — лични данни; само за посочено хранилище.
+6. Оторизирано картиране на повърхност — live probe само с authorized_target;
+   без exploit payloads.
+
+Потвърждавате законно основание, че проксито е ваше, и приемате цялата отговорност.
 Напишете фразата точно, после включете отделните опции.
 """
 
@@ -83,6 +120,15 @@ class RiskCapabilityOff(Exception):
         )
 
 
+class ProxyRequired(Exception):
+    def __init__(self, capability: str = "operator_proxy"):
+        self.capability = capability
+        super().__init__(
+            "High-risk egress requires your HTTP/SOCKS proxy. Set proxy_url in Settings "
+            "after accepting the notice (e.g. socks5://127.0.0.1:9050)."
+        )
+
+
 def _empty_caps() -> dict[str, bool]:
     return {name: False for name in CAPABILITIES}
 
@@ -93,8 +139,33 @@ def _default_state() -> dict[str, Any]:
         "acknowledged": False,
         "acknowledged_at": None,
         "authorized_use": False,
+        "proxy_url": "",
         "capabilities": _empty_caps(),
     }
+
+
+def validate_proxy_url(raw: str) -> str:
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    parsed = urlparse(text)
+    if parsed.scheme not in PROXY_SCHEMES:
+        raise ValueError("Proxy must be http(s) or socks4/socks5, e.g. socks5://127.0.0.1:9050")
+    if not parsed.hostname:
+        raise ValueError("Proxy host is required.")
+    if parsed.path not in ("", "/"):
+        raise ValueError("Proxy URL must not include a path.")
+    return text
+
+
+def redact_proxy(url: str) -> str:
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    port = f":{parsed.port}" if parsed.port else ""
+    auth = "***@" if parsed.username else ""
+    return f"{parsed.scheme}://{auth}{host}{port}"
 
 
 def _load() -> dict[str, Any]:
@@ -111,6 +182,10 @@ def _load() -> dict[str, Any]:
     state["acknowledged_at"] = raw.get("acknowledged_at")
     state["authorized_use"] = bool(raw.get("authorized_use"))
     state["notice_version"] = NOTICE_VERSION
+    try:
+        state["proxy_url"] = validate_proxy_url(str(raw.get("proxy_url") or ""))
+    except ValueError:
+        state["proxy_url"] = ""
     caps = raw.get("capabilities") if isinstance(raw.get("capabilities"), dict) else {}
     if not state["acknowledged"] or not state["authorized_use"]:
         return state
@@ -121,11 +196,16 @@ def _load() -> dict[str, Any]:
 
 def _save(state: dict[str, Any]) -> dict[str, Any]:
     RISK_ACK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        proxy = validate_proxy_url(str(state.get("proxy_url") or ""))
+    except ValueError:
+        proxy = ""
     payload = {
         "notice_version": NOTICE_VERSION,
         "acknowledged": bool(state.get("acknowledged")),
         "acknowledged_at": state.get("acknowledged_at"),
         "authorized_use": bool(state.get("authorized_use")),
+        "proxy_url": proxy,
         "capabilities": {name: bool((state.get("capabilities") or {}).get(name)) for name in CAPABILITIES},
     }
     RISK_ACK_PATH.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -136,6 +216,21 @@ def _save(state: dict[str, Any]) -> dict[str, Any]:
     return _load()
 
 
+def _capability_catalog() -> list[dict[str, Any]]:
+    return [
+        {"id": "flaresolverr", "name": "FlareSolverr (BYO instance)", "proxy_required": False},
+        {"id": "tls_impersonate", "name": "TLS/JA3 impersonation (curl_cffi)", "proxy_required": True},
+        {"id": "fingerprint_profiles", "name": "Coherent Canvas/WebGL/Audio profiles", "proxy_required": False},
+        {"id": "linkedin_public_fetch", "name": "LinkedIn public fetch via your proxy (no login bypass)", "proxy_required": True},
+        {"id": "github_commit_emails", "name": "GitHub public commit author emails via your proxy", "proxy_required": True},
+        {
+            "id": "authorized_surface_enum",
+            "name": "Authorized HTTP surface enumeration (live probe, no exploits)",
+            "proxy_required": True,
+        },
+    ]
+
+
 def get_notice() -> dict[str, Any]:
     return {
         "notice_version": NOTICE_VERSION,
@@ -143,32 +238,62 @@ def get_notice() -> dict[str, Any]:
         "phrases_accepted": list(ACK_PHRASES),
         "notice_en": NOTICE_EN,
         "notice_bg": NOTICE_BG,
-        "capabilities": [
-            {"id": "flaresolverr", "name": "FlareSolverr (BYO instance)"},
-            {"id": "tls_impersonate", "name": "TLS/JA3 impersonation (curl_cffi)"},
-            {"id": "fingerprint_profiles", "name": "Coherent Canvas/WebGL/Audio profiles"},
-            {"id": "linkedin_public_fetch", "name": "LinkedIn public fetch (no login bypass)"},
-            {"id": "github_commit_emails", "name": "GitHub public commit author emails"},
-        ],
+        "proxy_required_for": list(PROXY_REQUIRED),
+        "capabilities": _capability_catalog(),
     }
 
 
 def get_status() -> dict[str, Any]:
     state = _load()
     notice = get_notice()
-    return {**notice, **state, "any_enabled": any(state["capabilities"].values())}
+    return {
+        **notice,
+        "acknowledged": state["acknowledged"],
+        "acknowledged_at": state["acknowledged_at"],
+        "authorized_use": state["authorized_use"],
+        "capabilities": state["capabilities"],
+        "proxy_configured": bool(state["proxy_url"]),
+        "proxy_redacted": redact_proxy(state["proxy_url"]),
+        "any_enabled": any(state["capabilities"].values()),
+    }
+
+
+def get_proxy_url() -> str:
+    return _load().get("proxy_url") or ""
+
+
+def operator_proxies() -> Optional[dict[str, str]]:
+    url = get_proxy_url()
+    if not url:
+        return None
+    return {"http": url, "https": url}
 
 
 def is_enabled(capability: str) -> bool:
     if capability not in CAPABILITIES:
         return False
     state = _load()
-    return bool(state["acknowledged"] and state["authorized_use"] and state["capabilities"].get(capability))
+    if not (state["acknowledged"] and state["authorized_use"] and state["capabilities"].get(capability)):
+        return False
+    if capability in PROXY_REQUIRED and not state["proxy_url"]:
+        return False
+    return True
 
 
 def require_capability(capability: str) -> None:
+    if capability in PROXY_REQUIRED and not get_proxy_url():
+        state = _load()
+        if state["acknowledged"] and state["authorized_use"] and state["capabilities"].get(capability):
+            raise ProxyRequired(capability)
     if not is_enabled(capability):
         raise RiskCapabilityOff(capability)
+
+
+def require_proxy(capability: str = "operator_proxy") -> str:
+    url = get_proxy_url()
+    if not url:
+        raise ProxyRequired(capability)
+    return url
 
 
 def acknowledge(
@@ -176,6 +301,7 @@ def acknowledge(
     *,
     authorized_use: bool,
     capabilities: Optional[dict[str, bool]] = None,
+    proxy_url: str = "",
 ) -> dict[str, Any]:
     typed = " ".join((phrase or "").strip().split()).upper()
     allowed = {p.upper() for p in ACK_PHRASES}
@@ -183,7 +309,7 @@ def acknowledge(
         return {
             **get_status(),
             "ok": False,
-            "error": f'Type {ACK_PHRASES[0]} or {ACK_PHRASES[1]} exactly after reading the notice.',
+            "error": f"Type {ACK_PHRASES[0]} or {ACK_PHRASES[1]} exactly after reading the notice.",
         }
     if not authorized_use:
         return {
@@ -191,15 +317,27 @@ def acknowledge(
             "ok": False,
             "error": "Set authorized_use=true — you confirm a lawful basis for these options.",
         }
+    try:
+        proxy = validate_proxy_url(proxy_url)
+    except ValueError as exc:
+        return {**get_status(), "ok": False, "error": str(exc)}
     caps = _empty_caps()
     incoming = capabilities or {}
     for name in CAPABILITIES:
-        caps[name] = bool(incoming.get(name))
+        want = bool(incoming.get(name))
+        if want and name in PROXY_REQUIRED and not proxy:
+            return {
+                **get_status(),
+                "ok": False,
+                "error": f"{name} requires proxy_url (HTTP or SOCKS) that you operate.",
+            }
+        caps[name] = want
     state = {
         "notice_version": NOTICE_VERSION,
         "acknowledged": True,
         "acknowledged_at": datetime.now(timezone.utc).isoformat(),
         "authorized_use": True,
+        "proxy_url": proxy,
         "capabilities": caps,
     }
     _save(state)
@@ -208,14 +346,30 @@ def acknowledge(
     return status
 
 
-def update_capabilities(capabilities: dict[str, bool]) -> dict[str, Any]:
+def update_capabilities(
+    capabilities: dict[str, bool],
+    *,
+    proxy_url: Optional[str] = None,
+) -> dict[str, Any]:
     state = _load()
     if not state["acknowledged"] or not state["authorized_use"]:
         return {**get_status(), "ok": False, "error": "Acknowledge the notice before toggling options."}
+    if proxy_url is not None:
+        try:
+            state["proxy_url"] = validate_proxy_url(proxy_url)
+        except ValueError as exc:
+            return {**get_status(), "ok": False, "error": str(exc)}
     caps = dict(state["capabilities"])
     for name in CAPABILITIES:
         if name in capabilities:
             caps[name] = bool(capabilities[name])
+    wants_proxy = any(caps.get(name) for name in PROXY_REQUIRED)
+    if wants_proxy and not state["proxy_url"]:
+        return {
+            **get_status(),
+            "ok": False,
+            "error": "Set proxy_url before enabling LinkedIn, GitHub emails, TLS impersonation, or live surface enumeration.",
+        }
     state["capabilities"] = caps
     _save(state)
     status = get_status()

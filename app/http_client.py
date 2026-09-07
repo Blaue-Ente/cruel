@@ -24,9 +24,17 @@ def safe_get(
     allow_redirects: bool = True,
     params: Optional[dict[str, Any]] = None,
     max_redirects: int = 5,
+    proxies: Optional[dict[str, str]] = None,
+    use_operator_proxy: bool = False,
 ) -> requests.Response:
     current = ensure_safe_url(url)
     merged = {**DEFAULT_HEADERS, **(headers or {})}
+    if use_operator_proxy:
+        from app.compliance.risk_gate import ProxyRequired, operator_proxies
+
+        proxies = operator_proxies()
+        if not proxies:
+            raise ProxyRequired("operator_proxy")
     session = requests.Session()
     hops = 0
     while True:
@@ -36,6 +44,7 @@ def safe_get(
             headers=merged,
             params=params,
             allow_redirects=False,
+            proxies=proxies,
         )
         if not allow_redirects or not response.is_redirect:
             return response

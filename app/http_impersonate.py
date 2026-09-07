@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any, Optional
 from urllib.parse import urljoin
 
-from app.compliance.risk_gate import is_enabled
+from app.compliance.risk_gate import is_enabled, operator_proxies
 from app.config import CURL_CFFI_IMPERSONATE, USER_AGENT
 from app.security.ssrf import UnsafeURLError, ensure_safe_url
 
@@ -43,6 +43,12 @@ def impersonate_get(
         }
     from curl_cffi import requests as cffi_requests
 
+    proxies = operator_proxies()
+    if not proxies:
+        return {
+            "ok": False,
+            "error": "tls_impersonate requires your HTTP/SOCKS proxy. Set proxy_url after accepting the notice.",
+        }
     current = ensure_safe_url(url)
     merged = {"Accept": "text/html,application/json;q=0.9,*/*;q=0.8", **(headers or {})}
     if "User-Agent" not in merged and "user-agent" not in {k.lower() for k in merged}:
@@ -56,6 +62,7 @@ def impersonate_get(
                 headers=merged,
                 impersonate=CURL_CFFI_IMPERSONATE,
                 allow_redirects=False,
+                proxies=proxies,
             )
             if resp.status_code not in (301, 302, 303, 307, 308):
                 text = resp.text or ""

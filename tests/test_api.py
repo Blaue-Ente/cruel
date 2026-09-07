@@ -35,6 +35,17 @@ def test_live_probe_requires_authorization(client, api_key):
     assert "authorized_target" in r.json()["detail"]
 
 
+def test_live_probe_requires_surface_cap_and_proxy(client, api_key):
+    r = client.post(
+        "/api/v1/probe/run",
+        headers={"X-API-Key": api_key},
+        json={"url": "https://example.com", "dry_run": False, "authorized_target": True, "modes": ["vision"]},
+    )
+    assert r.status_code == 403
+    body = r.json()
+    assert body.get("capability") == "authorized_surface_enum"
+
+
 def test_copilot_requires_key(client):
     r = client.post("/api/v1/copilot", json={"message": "health"})
     assert r.status_code == 401

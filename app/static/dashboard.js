@@ -373,6 +373,7 @@ async function runCopilot(message, { fromHero } = {}) {
         llm_model: state.llmModel || null,
         privacy_layer: state.privacyLayer || null,
         country: state.country || null,
+        desk: $("copilot-desk")?.value || $("research-desk")?.value || null,
       }),
     });
     const d = await r.json();
@@ -992,7 +993,21 @@ async function loadResearchForecast() {
   } catch {}
 }
 
+function renderGaps(pack) {
+  const box = $("research-gaps");
+  if (!box) return;
+  const gaps = (pack.reflection && pack.reflection.gaps) || [];
+  if (!gaps.length) {
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML = `<article class="research-item"><strong>Coverage gaps (traces, not facts)</strong>${
+    gaps.map((g) => `<p class="muted-sm">${g.severity || ""}: ${g.title || ""} — ${g.detail || ""}</p>`).join("")
+  }</article>`;
+}
+
 function renderInbox(pack) {
+  renderGaps(pack);
   const box = $("research-inbox");
   if (!box) return;
   const docs = pack.documents || [];
@@ -1115,6 +1130,7 @@ async function runResearch() {
         mode: $("research-mode").value,
         workflow: $("research-workflow").value,
         include_people: $("research-people").checked,
+        desk: $("research-desk")?.value || null,
         privacy_layer: state.privacyLayer || null,
         country: state.country || null,
       }),
@@ -1141,6 +1157,53 @@ async function runResearch() {
   } catch (e) {
     setArgosState("error", "Discovery stopped", e.message);
     $("research-inbox").innerHTML = `<div class="error-state">${e.message}</div>`;
+  }
+}
+
+async function steerResearch(action, extra = {}) {
+  if (!state.apiKey) return alert(t("need_key"));
+  if (!state.researchId) return alert("Run Discovery first.");
+  try {
+    const r = await fetch(`/api/v1/research/${state.researchId}/steer`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ action, ...extra }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Steer failed");
+    if (d.inbox) {
+      renderInbox(d.inbox);
+      renderReport(d.inbox);
+      applyMission(d.inbox.mission);
+    }
+    $("research-run-status").textContent = `${d.status || d.inbox?.task?.status || action} · steering`;
+    return d;
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function ingestResearchFile() {
+  if (!state.apiKey) return alert(t("need_key"));
+  if (!state.researchId) return alert("Run Discovery first.");
+  const text = $("research-ingest-text")?.value || "";
+  if (!text.trim()) return alert("Paste text to store as an unverified trace.");
+  try {
+    const r = await fetch(`/api/v1/research/${state.researchId}/ingest`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        filename: $("research-ingest-name")?.value || "upload.txt",
+        text,
+        content_type: "text/plain",
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Ingest failed");
+    if ($("research-ingest-text")) $("research-ingest-text").value = "";
+    await loadResearchInbox(state.researchId);
+  } catch (e) {
+    alert(e.message);
   }
 }
 
@@ -1578,6 +1641,7 @@ const RISK_CAP_IDS = {
   fingerprint_profiles: "risk-fingerprint",
   linkedin_public_fetch: "risk-linkedin",
   github_commit_emails: "risk-github",
+  authorized_surface_enum: "risk-surface",
 };
 
 function closeRiskNotice() {
@@ -1599,6 +1663,15 @@ function applyRiskStatus(d) {
     ? `Notice accepted. Enabled: ${enabled.join(", ")}`
     : "Notice accepted. Switches stay off until you enable them below.";
   toggles?.classList.remove("hidden");
+  const proxyLine = $("risk-proxy-line");
+  if (proxyLine) {
+    proxyLine.textContent = d.proxy_configured
+      ? `Proxy configured: ${d.proxy_redacted || "(redacted)"}`
+      : "No proxy configured. LinkedIn, GitHub emails, TLS impersonation, and live surface enum stay off until you set one you operate.";
+  }
+  if ($("risk-proxy") && d.proxy_redacted && !$("risk-proxy").value) {
+    $("risk-proxy").placeholder = d.proxy_redacted;
+  }
   Object.entries(RISK_CAP_IDS).forEach(([cap, id]) => {
     const el = $(id);
     if (el) el.checked = Boolean(caps[cap]);
@@ -1643,7 +1716,12 @@ async function acceptRiskNotice() {
     const r = await fetch("/api/v1/compliance/risk/acknowledge", {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ phrase, authorized_use: true, capabilities: {} }),
+      body: JSON.stringify({
+        phrase,
+        authorized_use: true,
+        capabilities: {},
+        proxy_url: ($("risk-proxy")?.value || "").trim() || null,
+      }),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || d.error || "Acknowledgment rejected");
@@ -1664,7 +1742,10 @@ async function saveRiskCaps() {
     const r = await fetch("/api/v1/compliance/risk/capabilities", {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ capabilities }),
+      body: JSON.stringify({
+        capabilities,
+        proxy_url: ($("risk-proxy")?.value || "").trim() || null,
+      }),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || d.error || "Could not save switches");
@@ -1861,6 +1942,10 @@ function init() {
   $("btn-gdpr-scan").addEventListener("click", runGdprScan);
   $("btn-apex-run")?.addEventListener("click", runApex);
   $("btn-research-run")?.addEventListener("click", runResearch);
+  $("btn-research-pause")?.addEventListener("click", () => steerResearch("pause"));
+  $("btn-research-resume")?.addEventListener("click", () => steerResearch("resume"));
+  $("btn-research-loop")?.addEventListener("click", () => steerResearch("add_loop", { loop: "academic" }));
+  $("btn-research-ingest")?.addEventListener("click", ingestResearchFile);
   $("btn-research-cancel")?.addEventListener("click", cancelResearch);
   $("btn-research-export")?.addEventListener("click", exportResearch);
   $("btn-research-verify")?.addEventListener("click", verifyResearch);

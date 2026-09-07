@@ -9,7 +9,15 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from app.auth import require_api_key
 from app.config import COMPLIANCE_COUNTRY, DEFAULT_PRIVACY_LAYER, RESEARCH_LAYERS_ENABLED
-from app.models import PheromoneFlushRequest, ResearchChipRequest, ResearchDiscoverRequest, ResearchMergeRequest, ResearchVerifyRequest
+from app.models import (
+    PheromoneFlushRequest,
+    ResearchChipRequest,
+    ResearchDiscoverRequest,
+    ResearchIngestRequest,
+    ResearchMergeRequest,
+    ResearchSteerRequest,
+    ResearchVerifyRequest,
+)
 from app.research.budget import RunCancelled
 from app.research.discovery import LayersDisabled, estimate, inbox, run_discovery
 from app.research.export import export_task, research_diff
@@ -62,6 +70,9 @@ async def api_discover(body: ResearchDiscoverRequest, _key: dict = Depends(requi
             include_people=body.include_people,
             custom_limits=body.custom_limits or None,
             urls=body.urls or None,
+            skip_desks=body.skip_desks or None,
+            extra_loops=body.extra_loops or None,
+            desk=body.desk or "",
         )
     except LayersDisabled as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -298,3 +309,52 @@ async def api_split(task_id: str, entity_id: str, reason: str = "operator split"
     if not get_task(task_id):
         raise HTTPException(status_code=404, detail="Research task not found")
     return split_entity(task_id, entity_id, reason)
+
+
+@router.get("/{task_id}/steer")
+async def api_get_steering(task_id: str, _key: dict = Depends(require_api_key)):
+    _enabled()
+    from app.research.steering import get_steering
+
+    try:
+        return get_steering(task_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+
+@router.post("/{task_id}/steer")
+async def api_steer(task_id: str, body: ResearchSteerRequest, _key: dict = Depends(require_api_key)):
+    _enabled()
+    from app.research.steering import steer
+
+    try:
+        return await asyncio.to_thread(
+            steer,
+            task_id,
+            body.action,
+            desk=body.desk or "",
+            loop=body.loop or "",
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Research task not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{task_id}/ingest")
+async def api_ingest(task_id: str, body: ResearchIngestRequest, _key: dict = Depends(require_api_key)):
+    _enabled()
+    from app.research.ingest import ingest_operator_file
+
+    try:
+        return await asyncio.to_thread(
+            ingest_operator_file,
+            task_id,
+            filename=body.filename,
+            text=body.text,
+            content_type=body.content_type,
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Research task not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -238,10 +238,12 @@ class RiskAcknowledgeRequest(BaseModel):
     phrase: str = Field(..., min_length=1, max_length=80)
     authorized_use: bool = False
     capabilities: dict[str, bool] = Field(default_factory=dict)
+    proxy_url: Optional[str] = None
 
 
 class RiskCapabilitiesRequest(BaseModel):
-    capabilities: dict[str, bool] = Field(default_factory=dict)
+    capabilities: dict[str, bool]
+    proxy_url: Optional[str] = None
 
 
 class FlareSolverrRequest(BaseModel):
@@ -268,6 +270,21 @@ class ResearchDiscoverRequest(BaseModel):
     country: Optional[str] = None
     custom_limits: dict[str, int] = Field(default_factory=dict)
     urls: list[str] = Field(default_factory=list)
+    skip_desks: list[str] = Field(default_factory=list)
+    extra_loops: list[str] = Field(default_factory=list)
+    desk: Optional[str] = None
+
+
+class ResearchSteerRequest(BaseModel):
+    action: str
+    desk: Optional[str] = None
+    loop: Optional[str] = None
+
+
+class ResearchIngestRequest(BaseModel):
+    filename: str = "upload.txt"
+    text: str = Field(..., min_length=1)
+    content_type: str = "text/plain"
 
 
 class ResearchVerifyRequest(BaseModel):
@@ -303,6 +320,7 @@ class CopilotRequest(BaseModel):
     llm_model: Optional[str] = None
     privacy_layer: Optional[str] = None
     country: Optional[str] = None
+    desk: Optional[str] = None
 
 
 class CopilotResponse(BaseModel):
@@ -311,6 +329,8 @@ class CopilotResponse(BaseModel):
     tools: list[dict[str, Any]] = Field(default_factory=list)
     privacy_layer: str = ""
     executed: bool = True
+    desk: Optional[str] = None
+    desks: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class PreferencesUpdate(BaseModel):

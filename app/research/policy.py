@@ -31,6 +31,7 @@ ACTION_METHODS = {
     "archive": ("wayback", "common_crawl"),
     "api": ("osint_public", "api_echo", "api_echo_public"),
     "registry": ("osint_public", "api_echo", "api_echo_public"),
+    "academic": ("osint_public", "api_echo", "api_echo_public"),
 }
 
 

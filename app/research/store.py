@@ -359,11 +359,11 @@ def add_event(task_id: str, stage: str, message: str) -> None:
         conn.commit()
 
 
-def list_events(task_id: str) -> list[dict[str, Any]]:
+def list_events(task_id: str, after_id: int = 0) -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT stage, message, created_at FROM research_events WHERE task_id = ? ORDER BY id",
-            (task_id,),
+            "SELECT id, stage, message, created_at FROM research_events WHERE task_id = ? AND id > ? ORDER BY id",
+            (task_id, max(0, int(after_id or 0))),
         ).fetchall()
     return [dict(row) for row in rows]
 

@@ -314,6 +314,21 @@ def tool_pheromone_telemetry() -> dict[str, Any]:
     return {"telemetry": telemetry(), "map": pheromone_map(20)}
 
 
+def tool_conduit_status() -> dict[str, Any]:
+    from app.conduit.runtime import status as conduit_status
+
+    body = conduit_status()
+    body.pop("listen", None)
+    return body
+
+
+def tool_playbook() -> dict[str, Any]:
+    from app.playbook import get_playbook
+
+    book = get_playbook()
+    return {"title": book.get("title"), "ids": book.get("ids"), "stance": book.get("stance")}
+
+
 TOOL_SPECS: list[ToolSpec] = [
     ToolSpec(
         name="inspect_health",
@@ -545,6 +560,18 @@ TOOL_SPECS: list[ToolSpec] = [
         description="Pheromone memory telemetry: mapped routes, skipped HTTP calls, cost-efficiency index.",
         parameters={"type": "object", "properties": {}},
         handler=tool_pheromone_telemetry,
+    ),
+    ToolSpec(
+        name="conduit_status",
+        description="Argos Conduit loopback proxy status (no secrets). Does not start the proxy.",
+        parameters={"type": "object", "properties": {}},
+        handler=tool_conduit_status,
+    ),
+    ToolSpec(
+        name="playbook",
+        description="Feature Inspector catalog: what each capability does and its legal notes.",
+        parameters={"type": "object", "properties": {}},
+        handler=tool_playbook,
     ),
 ]
 

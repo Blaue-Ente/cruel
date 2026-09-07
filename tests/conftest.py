@@ -21,7 +21,7 @@ os.environ["ALLOW_INSECURE_DEFAULTS"] = "true"
 os.environ["SSRF_ALLOW_PRIVATE"] = "false"
 os.environ["RATE_LIMIT_ANONYMOUS"] = "1000"
 os.environ["RATE_LIMIT_AUTHENTICATED"] = "1000"
-os.environ["LLM_PROVIDER"] = "rule"
+os.environ["ARGOS_VEIL_JITTER_MS"] = "0"
 
 import pytest
 from fastapi.testclient import TestClient

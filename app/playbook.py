@@ -339,6 +339,36 @@ ENTRIES: list[dict[str, Any]] = [
         "legal": "No auth bypass, no ransomware tooling, no fuzz payloads. Copilot cannot enable this switch.",
         "outputs": ["probe_results"],
     },
+    {
+        "id": "argos_conduit",
+        "name": "Argos Conduit",
+        "category": "high-risk",
+        "summary": "In-app loopback HTTP/CONNECT proxy. Policy (SSRF) + Witness Ledger. Optional upstream: your proxy or a Tor SOCKS port you already run.",
+        "use_when": "You want the product to own egress policy without shipping a public stealth network.",
+        "expected": "listen http://127.0.0.1:<port>, hash-chained hops, loopback_only=true.",
+        "legal": "Never binds a public interface. Does not launch Tor. No residential rotation. You accept liability for upstream use.",
+        "outputs": ["listen", "witness"],
+    },
+    {
+        "id": "argos_veil",
+        "name": "Argos Veil (witnessed quiet)",
+        "category": "high-risk",
+        "summary": "Split-horizon quiet mode: Lantern (OpenAlex/Crossref/arXiv/archives) stays identified; live third-party fetches jitter, drop extra headers, and write the Witness Ledger.",
+        "use_when": "You need anti-correlation and an audit trail, not invisibility.",
+        "expected": "lane=lantern|veil hops. Not deniable. No stealth login, no canvas noise.",
+        "legal": "Requires proxy or Conduit plus the operator notice. Copilot cannot enable Veil.",
+        "outputs": ["lane", "hop_hash"],
+    },
+    {
+        "id": "mcp_sse",
+        "name": "Research MCP + SSE",
+        "category": "system",
+        "summary": "JSON-RPC tools/list and tools/call at POST /mcp, plus GET /api/v1/research/{id}/stream for live events.",
+        "use_when": "An external operator agent should drive Discovery without sitting in the UI.",
+        "expected": "Same tools and confirmation rules as Copilot. Chip spend stays unconfirmed via MCP.",
+        "legal": "API key required. High-risk LinkedIn/GitHub/probe tools are not on the MCP surface.",
+        "outputs": ["tools", "sse_events"],
+    },
 ]
 
 
@@ -348,11 +378,10 @@ def get_playbook() -> dict[str, Any]:
         "stance": (
             "ArgosScout is a privacy-first research OS. Discovery collects unverified traces; "
             "Verification is an optional second pass and never a silent truth score. "
-            "High-risk options (FlareSolverr sidecar, TLS impersonation, fingerprint profiles, "
-            "LinkedIn public fetch, GitHub commit emails, authorized surface enumeration) stay off "
-            "until the operator reads the notice, types the acceptance phrase, sets a BYO HTTP/SOCKS "
-            "proxy for egress options, and enables each switch. ArgosScout does not ship exploits, "
-            "stealth logins, or credential stuffing. "
+            "High-risk options stay off until the operator reads the notice, types the acceptance phrase, "
+            "and sets BYO proxy or Argos Conduit for egress. Argos Veil is witnessed quiet (lantern/veil split), "
+            "not stealth login. MCP/SSE use the same gates. "
+            "ArgosScout does not ship exploits, stealth logins, or credential stuffing. "
             "When a live page refuses inspection, prefer the lawful fallback tree."
         ),
         "entries": ENTRIES,

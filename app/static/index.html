@@ -50,7 +50,7 @@
         <button class="icon-btn" id="btn-locale" title="Language">EN</button>
         <button class="icon-btn" id="btn-playbook" title="Feature Inspector">📘</button>
         <button class="icon-btn" id="btn-shortcuts" title="Shortcuts">?</button>
-        <span class="badge badge-green">v8.4</span>
+        <span class="badge badge-green">v8.5</span>
       </div>
     </header>
 
@@ -878,15 +878,25 @@
               <div id="risk-status-line" class="muted-sm" style="margin-bottom:.75rem">All high-risk options are off until you read and accept the notice.</div>
               <button class="btn btn-secondary" id="btn-risk-notice" type="button">Read notice &amp; accept risk</button>
               <div id="risk-toggles" class="hidden" style="margin-top:1rem">
-                <label>Your HTTP/SOCKS proxy (required for LinkedIn, GitHub emails, TLS impersonation, live surface enum)</label>
+                <label>Your HTTP/SOCKS proxy (or start Argos Conduit below)</label>
                 <input type="text" id="risk-proxy" placeholder="socks5://127.0.0.1:9050" autocomplete="off" />
-                <p id="risk-proxy-line" class="muted-sm">No proxy configured. Egress options stay off until you set one you operate.</p>
+                <p id="risk-proxy-line" class="muted-sm">No live egress. Set a proxy you operate or start Argos Conduit.</p>
                 <div class="toggle-row"><input type="checkbox" id="risk-flaresolverr" /><label for="risk-flaresolverr" style="margin:0">FlareSolverr (BYO instance)</label></div>
                 <div class="toggle-row"><input type="checkbox" id="risk-tls" /><label for="risk-tls" style="margin:0">TLS/JA3 impersonation (curl_cffi) — requires proxy</label></div>
                 <div class="toggle-row"><input type="checkbox" id="risk-fingerprint" /><label for="risk-fingerprint" style="margin:0">Canvas / WebGL / Audio profiles</label></div>
                 <div class="toggle-row"><input type="checkbox" id="risk-linkedin" /><label for="risk-linkedin" style="margin:0">LinkedIn public fetch via your proxy (no login bypass)</label></div>
                 <div class="toggle-row"><input type="checkbox" id="risk-github" /><label for="risk-github" style="margin:0">GitHub public commit emails via your proxy</label></div>
                 <div class="toggle-row"><input type="checkbox" id="risk-surface" /><label for="risk-surface" style="margin:0">Authorized HTTP surface enumeration (live probe, no exploits) — requires proxy</label></div>
+                <div class="toggle-row"><input type="checkbox" id="risk-conduit" /><label for="risk-conduit" style="margin:0">Argos Conduit — loopback policy proxy + Witness Ledger</label></div>
+                <div class="toggle-row"><input type="checkbox" id="risk-veil" /><label for="risk-veil" style="margin:0">Argos Veil — witnessed quiet (lantern/veil split), not stealth login</label></div>
+                <div class="toggle-row"><input type="checkbox" id="conduit-use-tor" /><label for="conduit-use-tor" style="margin:0">Chain Conduit to local Tor SOCKS (9050/9150) — you start Tor; ArgosScout will not</label></div>
+                <div class="row" style="margin-top:.6rem">
+                  <button class="btn btn-secondary" id="btn-conduit-start" type="button">Start Conduit</button>
+                  <button class="btn btn-secondary" id="btn-conduit-stop" type="button">Stop Conduit</button>
+                  <button class="btn btn-secondary" id="btn-conduit-witness" type="button">Witness ledger</button>
+                </div>
+                <p id="conduit-status-line" class="muted-sm" style="margin-top:.5rem">Conduit is stopped. Loopback only.</p>
+                <pre id="conduit-witness" class="json-view" style="margin-top:.6rem;max-height:180px">// Witness Ledger appears after hops</pre>
                 <button class="btn btn-primary" id="btn-risk-save-caps" type="button">Save high-risk switches</button>
                 <button class="btn btn-danger" id="btn-risk-revoke" type="button">Revoke acknowledgment</button>
               </div>

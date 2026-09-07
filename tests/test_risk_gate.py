@@ -11,6 +11,7 @@ from app.compliance.risk_gate import (
     acknowledge,
     get_notice,
     get_status,
+    is_armed,
     is_enabled,
     require_capability,
     revoke,
@@ -47,12 +48,17 @@ def test_notice_is_public_shaped():
     notice = get_notice()
     assert "FlareSolverr" in notice["notice_en"]
     assert "ПРИЕМАМ РИСКА" in notice["phrases_accepted"]
-    assert notice["notice_version"] == 2
-    assert NOTICE_VERSION == 2
+    assert notice["notice_version"] == 3
+    assert NOTICE_VERSION == 3
     ids = {c["id"] for c in notice["capabilities"]}
     assert ids == set(CAPABILITIES)
     assert "authorized_surface_enum" in ids
     assert "linkedin_public_fetch" in notice["proxy_required_for"]
+    assert "argos_veil" in notice["proxy_required_for"]
+    assert "argos_conduit" not in notice["proxy_required_for"]
+    assert "Argos Conduit" in notice["notice_en"]
+    assert "Argos Veil" in notice["notice_en"]
+    assert "Witness Ledger" in notice["notice_en"]
 
 
 def test_ack_rejects_wrong_phrase():
@@ -118,7 +124,7 @@ def test_ack_file_mode_600(isolated_risk_ack):
     mode = isolated_risk_ack.stat().st_mode & 0o777
     assert mode == 0o600
     payload = json.loads(isolated_risk_ack.read_text())
-    assert payload["notice_version"] == 2
+    assert payload["notice_version"] == 3
 
 
 def test_disabled_clients_do_not_call_out():
@@ -277,6 +283,43 @@ def test_stale_v1_ack_does_not_count(isolated_risk_ack):
     status = get_status()
     assert status["acknowledged"] is False
     assert is_enabled("tls_impersonate") is False
+
+
+def test_stale_v2_ack_does_not_count(isolated_risk_ack):
+    isolated_risk_ack.write_text(
+        json.dumps(
+            {
+                "notice_version": 2,
+                "acknowledged": True,
+                "authorized_use": True,
+                "capabilities": {"argos_veil": True, "argos_conduit": True},
+                "proxy_url": "",
+            }
+        ),
+        encoding="utf-8",
+    )
+    status = get_status()
+    assert status["acknowledged"] is False
+    assert is_armed("argos_veil") is False
+    assert is_enabled("argos_veil") is False
+
+
+def test_veil_requires_proxy_or_conduit():
+    denied = acknowledge(
+        "I ACCEPT THE RISK",
+        authorized_use=True,
+        capabilities={"argos_veil": True},
+    )
+    assert denied["ok"] is False
+    ok = acknowledge(
+        "I ACCEPT THE RISK",
+        authorized_use=True,
+        capabilities={"argos_conduit": True, "argos_veil": True},
+    )
+    assert ok["ok"] is True
+    assert is_armed("argos_veil") is True
+    assert is_enabled("argos_veil") is False  # Conduit not listening yet
+    assert is_enabled("argos_conduit") is True
 
 
 def test_clearing_proxy_while_egress_on_fails():

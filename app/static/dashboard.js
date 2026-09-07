@@ -1147,6 +1147,7 @@ async function runResearch() {
     applyMission(d.mission);
     if ($("research-inspector")) $("research-inspector").textContent = JSON.stringify(d, null, 2);
     $("research-run-status").textContent = `${done} · ${d.counts?.documents || 0} materials`;
+    replayResearchStream(d.task.id);
     loadEfficiencyTelemetry();
     loadSnapshotSelects();
     if (state.researchTab === "graph") loadResearchGraph();
@@ -1205,6 +1206,46 @@ async function ingestResearchFile() {
   } catch (e) {
     alert(e.message);
   }
+}
+
+async function replayResearchStream(taskId) {
+  if (!state.apiKey || !taskId) return;
+  try {
+    const r = await fetch(`/api/v1/research/${taskId}/stream?follow=false`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const text = await r.text();
+    const blocks = text.split("\n\n");
+    for (const block of blocks) {
+      if (!block.includes("event: research")) continue;
+      const line = block.split("\n").find((l) => l.startsWith("data: "));
+      if (!line) continue;
+      try {
+        const ev = JSON.parse(line.slice(6));
+        setArgosState("discover", ev.stage || "research", ev.message || "");
+      } catch {}
+    }
+  } catch {}
+}
+
+async function conduitAction(path, method = "GET") {
+  if (!state.apiKey) return alert(t("need_key"));
+  const extra = {};
+  if (method === "POST" && path.endsWith("/start")) {
+    extra.body = JSON.stringify({
+      use_operator_upstream: true,
+      use_local_tor: Boolean($("conduit-use-tor")?.checked),
+    });
+  }
+  const r = await fetch(path, { method, headers: authHeaders(), ...extra });
+  const d = await r.json();
+  if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : (d.error || "Conduit error"));
+  if ($("conduit-status-line")) {
+    $("conduit-status-line").textContent = d.running
+      ? `Conduit on ${d.listen || "loopback"} · Tor SOCKS ${d.tor?.detected ? "detected" : "not detected"}`
+      : (d.note || "Conduit stopped.");
+  }
+  if ($("conduit-witness") && d.items) $("conduit-witness").textContent = JSON.stringify(d, null, 2);
+  return d;
 }
 
 async function verifyResearch() {
@@ -1642,6 +1683,8 @@ const RISK_CAP_IDS = {
   linkedin_public_fetch: "risk-linkedin",
   github_commit_emails: "risk-github",
   authorized_surface_enum: "risk-surface",
+  argos_conduit: "risk-conduit",
+  argos_veil: "risk-veil",
 };
 
 function closeRiskNotice() {
@@ -1666,8 +1709,8 @@ function applyRiskStatus(d) {
   const proxyLine = $("risk-proxy-line");
   if (proxyLine) {
     proxyLine.textContent = d.proxy_configured
-      ? `Proxy configured: ${d.proxy_redacted || "(redacted)"}`
-      : "No proxy configured. LinkedIn, GitHub emails, TLS impersonation, and live surface enum stay off until you set one you operate.";
+      ? `Egress configured (${d.proxy_source || "operator"}): ${d.proxy_redacted || "(redacted)"}`
+      : "No live egress. Set your HTTP/SOCKS proxy or enable Argos Conduit and press Start.";
   }
   if ($("risk-proxy") && d.proxy_redacted && !$("risk-proxy").value) {
     $("risk-proxy").placeholder = d.proxy_redacted;
@@ -1975,6 +2018,18 @@ function init() {
   $("btn-risk-fs")?.addEventListener("click", runFlareSolverrFetch);
   $("btn-risk-li")?.addEventListener("click", runLinkedInFetch);
   $("btn-risk-gh")?.addEventListener("click", runGithubEmailsFetch);
+  $("btn-conduit-start")?.addEventListener("click", async () => {
+    try { await conduitAction("/api/v1/conduit/start", "POST"); } catch (e) { alert(e.message); }
+  });
+  $("btn-conduit-stop")?.addEventListener("click", async () => {
+    try { await conduitAction("/api/v1/conduit/stop", "POST"); } catch (e) { alert(e.message); }
+  });
+  $("btn-conduit-witness")?.addEventListener("click", async () => {
+    try {
+      const d = await conduitAction("/api/v1/conduit/witness");
+      if ($("conduit-witness")) $("conduit-witness").textContent = JSON.stringify(d, null, 2);
+    } catch (e) { alert(e.message); }
+  });
   $("risk-overlay")?.addEventListener("click", (e) => { if (e.target.id === "risk-overlay") closeRiskNotice(); });
   $("risk-phrase")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); acceptRiskNotice(); }

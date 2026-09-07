@@ -102,6 +102,9 @@ def test_playbook_covers_arsenal():
         "academic",
         "steering",
         "authorized_surface_enum",
+        "argos_conduit",
+        "argos_veil",
+        "mcp_sse",
     ):
         assert key in ids
     swarm = next(e for e in book["entries"] if e["id"] == "swarm")

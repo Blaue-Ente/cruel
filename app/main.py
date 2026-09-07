@@ -116,6 +116,8 @@ from app.wayback import temporal_analysis
 from app.http_client import safe_get
 from app.routers.workspace import router as workspace_router
 from app.routers.research import router as research_router
+from app.routers.mcp import router as mcp_router
+from app.routers.conduit import router as conduit_router
 from app.security.middleware import install_security_middleware
 from app.security.ssrf import UnsafeURLError
 
@@ -143,6 +145,8 @@ app = FastAPI(
 install_security_middleware(app)
 app.include_router(workspace_router)
 app.include_router(research_router)
+app.include_router(mcp_router)
+app.include_router(conduit_router)
 
 static_dir = BASE_DIR / "app" / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -195,6 +199,7 @@ async def health():
             "admin_secret_insecure": admin_secret_is_insecure(),
             "admin_secret_source": ADMIN_SECRET_SOURCE,
             "websocket_requires_api_key": True,
+            "mcp_requires_api_key": True,
         },
         "risk": {
             "acknowledged": risk["acknowledged"],
@@ -206,6 +211,9 @@ async def health():
             "local_only": RESEARCH_LOCAL_ONLY or LLM_PROVIDER in {"rule", "ollama"},
             "workflows": ["discover_only", "discover_then_verify"],
             "executive_suite": True,
+            "mcp": True,
+            "sse": True,
+            "conduit": True,
         },
     }
 

@@ -29,12 +29,17 @@ def safe_get(
 ) -> requests.Response:
     current = ensure_safe_url(url)
     merged = {**DEFAULT_HEADERS, **(headers or {})}
-    if use_operator_proxy:
-        from app.compliance.risk_gate import ProxyRequired, operator_proxies
+    from app.conduit.veil import prepare_egress
+    from app.conduit.witness import record_hop
 
-        proxies = operator_proxies()
-        if not proxies:
-            raise ProxyRequired("operator_proxy")
+    prep = prepare_egress(
+        current,
+        headers=merged,
+        proxies=proxies,
+        use_operator_proxy=use_operator_proxy,
+    )
+    merged = prep["headers"]
+    proxies = prep["proxies"]
     session = requests.Session()
     hops = 0
     while True:
@@ -46,6 +51,14 @@ def safe_get(
             allow_redirects=False,
             proxies=proxies,
         )
+        if prep.get("veil"):
+            record_hop(
+                method="GET",
+                url=current,
+                status=response.status_code,
+                lane=prep.get("lane") or "veil",
+                bytes_out=len(response.content or b""),
+            )
         if not allow_redirects or not response.is_redirect:
             return response
         location = response.headers.get("Location")

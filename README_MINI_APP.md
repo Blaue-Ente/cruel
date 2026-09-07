@@ -1,8 +1,19 @@
-# ArgosScout v8.4 — Dual-layer research OS (Phase A + B)
+# ArgosScout v8.5 — Dual-layer research OS (Phase C)
 
 Self-hosted research workstation: ask a question, get a **cited, compliance-aware dossier**. Copilot executes tools (Apex, search, extract, Wayback, registries, academic traces, GDPR) instead of chatting in circles.
 
 **North star:** time-to-trusted-insight — seconds from a prompt to sources you can defend.
+
+## v8.5 highlights (Phase C) — Conduit, Veil, MCP/SSE
+
+“Stealth” here is **witnessed quiet**, not invisibility. ArgosScout does not ship anti-detect browsers, residential IP farms, or stealth logins. It ships a product-owned **policy proxy** and an auditable quiet lane.
+
+- **Argos Conduit** — in-app HTTP/CONNECT proxy bound to **loopback only** (`127.0.0.1`). Every destination is SSRF-checked. Optional upstream: **your** HTTP/SOCKS proxy, or a Tor SOCKS port **you already run** on 9050/9150. ArgosScout will not launch Tor and will not bind a public interface.
+- **Argos Veil** — split-horizon quiet mode. **Lantern** hosts (OpenAlex, Crossref, arXiv, archive.org, SEC, Companies House, OpenCorporates, Wikipedia/Wikidata, IANA) stay identified bibliographic/registry clients. Live third-party fetches jitter, send DNT/GPC, drop extra product headers, and go through your proxy or Conduit.
+- **Witness Ledger** — append-only, hash-chained JSONL (`data/witness.jsonl`, mode 0600). Quiet is **auditable, not deniable**. Query strings are dropped; emails in paths are redacted.
+- **Research MCP** — JSON-RPC 2.0 at `POST /mcp` (alias `POST /api/v1/mcp`). Same Copilot tools and confirmation rules. High-risk LinkedIn/GitHub/live probe tools are **not** on this surface. Chip execute still cannot set `confirmed=true`.
+- **SSE stream** — `GET /api/v1/research/{task_id}/stream` (API key required). `follow=false` returns a snapshot then `event: done`.
+- **Risk gate notice v3** — Veil requires proxy **or** Conduit. Copilot cannot enable Conduit/Veil. Revoke stops Conduit.
 
 ## v8.4 highlights (Phase A + B)
 
@@ -14,8 +25,6 @@ Self-hosted research workstation: ask a question, get a **cited, compliance-awar
 - **Copilot desks** — Synthesist, Registry, Academic, DPO. Prompt + routing only. Same tools, same risk gate, no extra rights.
 - **Risk gate notice v2** — LinkedIn public GET, GitHub commit emails, TLS impersonation, and live authorized surface enumeration require **your HTTP/SOCKS proxy** plus the acceptance phrase and `authorized_use`. FlareSolverr stays BYO sidecar (no extra HTTP proxy). Copilot cannot enable those switches.
 - **Still out of product:** exploit payloads, stealth LinkedIn login, credential stuffing, Cloudflare/Turnstile solver, canvas-noise anti-detect, GitHub-wide person hunt.
-
-Phase C (MCP/SSE) is not in this release.
 
 ## v8 Apex highlights
 
@@ -51,9 +60,11 @@ All of the following are **off until you opt in**. Enabling them is your legal r
 | Fingerprint profiles | Align UA / platform / WebGL / AudioContext; hide `navigator.webdriver` | No canvas noise, not anti-detect-as-a-service |
 | LinkedIn public fetch | Unauthenticated GET **via your proxy**; login wall / 999 **fail closed** | No stealth login |
 | GitHub commit emails | Public commits API for a **repo you name**, max 30, **via your proxy** | No GitHub-wide person hunt, not credential stuffing |
-| Authorized surface enum | Live Active Probe / HTTP path mapping on a host with `authorized_target=true`, **via your proxy** | No exploit payloads, no auth bypass. Dry-run stays available without this flag |
+| Authorized surface enum | Live Active Probe / HTTP path mapping on a host with `authorized_target=true`, **via your proxy or Conduit** | No exploit payloads, no auth bypass. Dry-run stays available without this flag |
+| Argos Conduit | Loopback HTTP/CONNECT policy proxy + Witness Ledger | Not a public proxy, not Tor-as-a-service, not residential rotation |
+| Argos Veil | Lantern/veil split: identified library APIs vs quiet live fetches | Not stealth login, not canvas noise, not deniable |
 
-Set `proxy_url` in Settings after accepting the notice (for example `socks5://127.0.0.1:9050` or an HTTP corporate egress you operate). ArgosScout does not provide stealth infrastructure. You accept all liability.
+Set `proxy_url` in Settings **or** enable Conduit and press Start (for example `socks5://127.0.0.1:9050`, a corporate HTTP egress you operate, or Conduit on `http://127.0.0.1:<ephemeral>`). ArgosScout does not provide stealth infrastructure. You accept all liability.
 
 ```bash
 # After acknowledging in Settings and enabling flaresolverr:
@@ -256,6 +267,13 @@ python3 -m playwright install chromium
 | `POST /api/v1/recon/flaresolverr` | BYO FlareSolverr (403 until enabled) |
 | `POST /api/v1/osint/linkedin` | Unauthenticated LinkedIn GET (403 until enabled) |
 | `POST /api/v1/osint/github-emails` | Public commit author emails (403 until enabled) |
+| `GET /mcp` | MCP server info (protocol version) |
+| `POST /mcp` | JSON-RPC 2.0 tools/list and tools/call (API key) |
+| `GET /api/v1/research/{id}/stream` | SSE research events (`follow=false` for snapshot) |
+| `GET /api/v1/conduit/status` | Loopback proxy status (no secrets in Copilot tool) |
+| `POST /api/v1/conduit/start` | Start Conduit (`use_operator_upstream`, `use_local_tor`) |
+| `POST /api/v1/conduit/stop` | Stop Conduit |
+| `GET /api/v1/conduit/witness` | Witness Ledger (hash chain) |
 | `GET /api/v1/playbook` | Feature Inspector catalog |
 | `GET /api/v1/copilot/context` | Scan / pheromone / obstacle context |
 | `POST /api/v1/copilot` | Action copilot (tools + synthesis) |
@@ -322,10 +340,12 @@ python3 run_app.py
 - [x] Operator file ingest into Layer A
 - [x] Copilot desks (Synthesist / Registry / Academic / DPO)
 - [x] BYO proxy required for high-risk egress (notice v2)
+- [x] Phase C MCP / SSE research streams
+- [x] Argos Conduit (in-app loopback policy proxy) + Witness Ledger
+- [x] Argos Veil (witnessed quiet / lantern split) — notice v3
 - [ ] Optional allow-list of scrape hosts for locked-down deployments
-- [ ] Phase C MCP / SSE research streams
 
-**Not shipped as always-on (by design):** Cloudflare challenge bypass, canvas-noise anti-detect, LinkedIn login bypass, GitHub-wide email harvesting, exploit payloads, credential stuffing. High-risk public fetch / live path mapping exist only behind the operator risk gate **and** a proxy you operate, off by default, with explicit consent.
+**Not shipped as always-on (by design):** Cloudflare challenge bypass, canvas-noise anti-detect, LinkedIn login bypass, GitHub-wide email harvesting, exploit payloads, credential stuffing, bundled Tor, public-bind proxy. High-risk public fetch / live path mapping / Veil exist only behind the operator risk gate **and** a proxy you operate or a running Conduit, off by default, with explicit consent.
 
 ## Лиценз
 

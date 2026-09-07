@@ -7,6 +7,7 @@ acknowledgment turns every flag off and clears the proxy.
 
 ArgosScout does not ship exploits, stealth logins, or credential stuffing.
 Authorized surface enumeration maps public HTTP paths on a host you may test.
+Argos Conduit is a loopback policy proxy with a Witness Ledger — quiet, not invisible.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from urllib.parse import urlparse
 
 from app.config import RISK_ACK_PATH
 
-NOTICE_VERSION = 2
+NOTICE_VERSION = 3
 ACK_PHRASES = ("I ACCEPT THE RISK", "ПРИЕМАМ РИСКА")
 
 CAPABILITIES = (
@@ -28,14 +29,17 @@ CAPABILITIES = (
     "linkedin_public_fetch",
     "github_commit_emails",
     "authorized_surface_enum",
+    "argos_conduit",
+    "argos_veil",
 )
 
-# These talk to third-party hosts and must egress via the operator proxy.
+# These talk to third-party hosts and must egress via operator proxy or Conduit.
 PROXY_REQUIRED = (
     "tls_impersonate",
     "linkedin_public_fetch",
     "github_commit_emails",
     "authorized_surface_enum",
+    "argos_veil",
 )
 
 PROXY_SCHEMES = ("http", "https", "socks4", "socks5", "socks5h")
@@ -45,19 +49,20 @@ NOTICE_EN = """HIGH-RISK OPERATOR OPTIONS — READ BEFORE ENABLING
 These switches are off by default. Turning any of them on is your decision and
 your legal responsibility. ArgosScout’s authors do not authorize misuse.
 
-A Bring-Your-Own PROXY is required for options that contact third-party hosts
-(LinkedIn public GET, GitHub commit emails, TLS impersonation, authorized
-surface enumeration). Put the traffic through YOUR HTTP or SOCKS proxy
-(for example a local Tor client or a documented corporate egress). ArgosScout
-does not provide stealth infrastructure.
+A Bring-Your-Own PROXY **or Argos Conduit** is required for options that contact
+third-party hosts (LinkedIn public GET, GitHub commit emails, TLS impersonation,
+authorized surface enumeration, Argos Veil). Conduit is a loopback policy proxy
+with a Witness Ledger. You still own the upstream IP (direct, corporate proxy,
+or a Tor client YOU start). ArgosScout does not ship residential rotation,
+canvas-noise anti-detect, stealth login, or a Cloudflare solver.
 
 1. FlareSolverr (Bring Your Own)
    Talks to a FlareSolverr instance YOU run (typically localhost:8191) to fetch
    a URL that served a bot challenge. ArgosScout does not ship a Cloudflare or
    Turnstile solver. You must have the right to fetch that host.
 
-2. TLS impersonation (optional curl_cffi) — requires proxy
-   Uses a Chrome-like TLS/JA3 client profile for outbound GET via your proxy.
+2. TLS impersonation (optional curl_cffi) — requires proxy or Conduit
+   Uses a Chrome-like TLS/JA3 client profile for outbound GET via your egress.
    This can evade naive TLS fingerprint blocks. Use only on hosts you are
    allowed to test. Not a WAF exploit.
 
@@ -66,24 +71,37 @@ does not provide stealth infrastructure.
    hardware profile, and may hide navigator.webdriver. This is not a full
    anti-detect pack (no canvas noise, no challenge solver, no stealth login).
 
-4. LinkedIn public fetch — requires proxy
-   Attempts an unauthenticated GET of a public LinkedIn URL through YOUR proxy.
+4. LinkedIn public fetch — requires proxy or Conduit
+   Attempts an unauthenticated GET of a public LinkedIn URL through your egress.
    Login walls, 999 blocks, and authenticated-only data are NOT bypassed.
    LinkedIn’s terms generally prohibit scraping. Enable only if you have a
    lawful basis. No session theft.
 
-5. GitHub public commit author emails — requires proxy
-   Reads author.email from the public GitHub commits API for a repo YOU name,
-   via your proxy. Many addresses are users.noreply.github.com. This is personal
-   data under GDPR. Named repository only — not a GitHub-wide person hunt, not
-   credential stuffing, not breach-list scraping.
+5. GitHub public commit author emails — requires proxy or Conduit
+   Reads author.email from the public GitHub commits API for a repo YOU name.
+   Many addresses are users.noreply.github.com. This is personal data under
+   GDPR. Named repository only — not a GitHub-wide person hunt, not credential
+   stuffing, not breach-list scraping.
 
-6. Authorized surface enumeration — requires proxy AND authorized_target
+6. Authorized surface enumeration — requires proxy or Conduit AND authorized_target
    Live Active Probe / HTTP path mapping on a host you confirm you may test.
    Discovers same-origin /api paths from public HTML. No exploit payloads, no
    auth bypass, no ransomware tooling. Dry-run stays available without this flag.
 
-You confirm: you have authorization or another lawful basis; the proxy is yours;
+7. Argos Conduit (in-app proxy function)
+   Starts a loopback-only HTTP/CONNECT proxy. Every hop is written to a
+   hash-chained Witness Ledger. Optional upstream: YOUR proxy URL, or a local
+   Tor SOCKS port YOU already run (9050/9150). ArgosScout will not launch Tor
+   or bind on a public interface.
+
+8. Argos Veil (witnessed quiet) — requires proxy or Conduit
+   Split-horizon: public bibliographic APIs stay on the Lantern lane (identified).
+   Live third-party fetches go quiet — jitter, DNT/GPC, no extra product headers,
+   isolated cookies, Witness Ledger. This is anti-correlation, not invisibility.
+   Not deniable: the ledger exists so you can prove what left the box.
+   No stealth login, no canvas noise, no challenge solver.
+
+You confirm: you have authorization or another lawful basis; the egress is yours;
 you will not attack third-party bot defenses, steal sessions, or harvest people
 at scale; you accept all liability. Type the phrase exactly, then enable
 individual options.
@@ -94,19 +112,21 @@ NOTICE_BG = """ОПЦИИ С ВИСОК РИСК — ПРОЧЕТЕТЕ ПРЕД
 По подразбиране всички ключове са изключени. Включването е ваше решение и
 ваша правна отговорност.
 
-За опции към чужди хостове е задължителен ВАШ HTTP/SOCKS прокси.
-ArgosScout не дава stealth инфраструктура, не прави stealth login и не
-пълни credentals.
+За опции към чужди хостове е задължителен ВАШ HTTP/SOCKS прокси или Argos Conduit
+(loopback policy proxy с Witness Ledger). ArgosScout не върти residential IP-та,
+не прави stealth login и не пълни credentials.
 
 1. FlareSolverr (свой инстанс) — ArgosScout не носи Cloudflare solver.
-2. TLS имитация (curl_cffi) — през вашия прокси, само към разрешени хостове.
+2. TLS имитация (curl_cffi) — през вашия egress, само към разрешени хостове.
 3. Съгласувани браузър профили — UA/WebGL/Audio; не е пълен anti-detect.
-4. LinkedIn публично теглене — през прокси; без логин и без заобикаляне на стена.
+4. LinkedIn публично теглене — през egress; без логин и без заобикаляне на стена.
 5. GitHub публични commit имейли — лични данни; само за посочено хранилище.
 6. Оторизирано картиране на повърхност — live probe само с authorized_target;
    без exploit payloads.
+7. Argos Conduit — локален прокси само на loopback, с одитен ledger.
+8. Argos Veil — тиха колекция (jitter + ledger). Не е невидимост и не е deniable.
 
-Потвърждавате законно основание, че проксито е ваше, и приемате цялата отговорност.
+Потвърждавате законно основание, че egress е ваш, и приемате цялата отговорност.
 Напишете фразата точно, после включете отделните опции.
 """
 
@@ -124,8 +144,9 @@ class ProxyRequired(Exception):
     def __init__(self, capability: str = "operator_proxy"):
         self.capability = capability
         super().__init__(
-            "High-risk egress requires your HTTP/SOCKS proxy. Set proxy_url in Settings "
-            "after accepting the notice (e.g. socks5://127.0.0.1:9050)."
+            "High-risk egress requires your HTTP/SOCKS proxy or a running Argos Conduit. "
+            "Set proxy_url in Settings or start Conduit after enabling it "
+            "(e.g. socks5://127.0.0.1:9050)."
         )
 
 
@@ -228,6 +249,16 @@ def _capability_catalog() -> list[dict[str, Any]]:
             "name": "Authorized HTTP surface enumeration (live probe, no exploits)",
             "proxy_required": True,
         },
+        {
+            "id": "argos_conduit",
+            "name": "Argos Conduit (loopback policy proxy + Witness Ledger)",
+            "proxy_required": False,
+        },
+        {
+            "id": "argos_veil",
+            "name": "Argos Veil (witnessed quiet / lantern split) — requires proxy or Conduit",
+            "proxy_required": True,
+        },
     ]
 
 
@@ -252,14 +283,36 @@ def get_status() -> dict[str, Any]:
         "acknowledged_at": state["acknowledged_at"],
         "authorized_use": state["authorized_use"],
         "capabilities": state["capabilities"],
-        "proxy_configured": bool(state["proxy_url"]),
-        "proxy_redacted": redact_proxy(state["proxy_url"]),
+        "proxy_configured": bool(state["proxy_url"]) or bool(_conduit_listen()),
+        "proxy_redacted": redact_proxy(state["proxy_url"]) or _conduit_redacted(),
+        "proxy_source": ("operator" if state["proxy_url"] else ("conduit" if _conduit_listen() else "")),
         "any_enabled": any(state["capabilities"].values()),
     }
 
 
-def get_proxy_url() -> str:
+def _conduit_listen() -> str:
+    try:
+        from app.conduit.runtime import listen_url
+
+        return listen_url() or ""
+    except Exception:
+        return ""
+
+
+def _conduit_redacted() -> str:
+    url = _conduit_listen()
+    return redact_proxy(url) if url else ""
+
+
+def get_operator_proxy_url() -> str:
     return _load().get("proxy_url") or ""
+
+
+def get_proxy_url() -> str:
+    stored = get_operator_proxy_url()
+    if stored:
+        return stored
+    return _conduit_listen()
 
 
 def operator_proxies() -> Optional[dict[str, str]]:
@@ -269,13 +322,18 @@ def operator_proxies() -> Optional[dict[str, str]]:
     return {"http": url, "https": url}
 
 
-def is_enabled(capability: str) -> bool:
+def is_armed(capability: str) -> bool:
+    """Notice accepted and the switch is on — does not require live egress yet."""
     if capability not in CAPABILITIES:
         return False
     state = _load()
-    if not (state["acknowledged"] and state["authorized_use"] and state["capabilities"].get(capability)):
+    return bool(state["acknowledged"] and state["authorized_use"] and state["capabilities"].get(capability))
+
+
+def is_enabled(capability: str) -> bool:
+    if not is_armed(capability):
         return False
-    if capability in PROXY_REQUIRED and not state["proxy_url"]:
+    if capability in PROXY_REQUIRED and not get_proxy_url():
         return False
     return True
 
@@ -323,13 +381,14 @@ def acknowledge(
         return {**get_status(), "ok": False, "error": str(exc)}
     caps = _empty_caps()
     incoming = capabilities or {}
+    conduit_on = bool(incoming.get("argos_conduit"))
     for name in CAPABILITIES:
         want = bool(incoming.get(name))
-        if want and name in PROXY_REQUIRED and not proxy:
+        if want and name in PROXY_REQUIRED and not proxy and not conduit_on:
             return {
                 **get_status(),
                 "ok": False,
-                "error": f"{name} requires proxy_url (HTTP or SOCKS) that you operate.",
+                "error": f"{name} requires proxy_url or Argos Conduit that you operate.",
             }
         caps[name] = want
     state = {
@@ -364,11 +423,11 @@ def update_capabilities(
         if name in capabilities:
             caps[name] = bool(capabilities[name])
     wants_proxy = any(caps.get(name) for name in PROXY_REQUIRED)
-    if wants_proxy and not state["proxy_url"]:
+    if wants_proxy and not state["proxy_url"] and not caps.get("argos_conduit") and not _conduit_listen():
         return {
             **get_status(),
             "ok": False,
-            "error": "Set proxy_url before enabling LinkedIn, GitHub emails, TLS impersonation, or live surface enumeration.",
+            "error": "Set proxy_url or enable Argos Conduit before LinkedIn, GitHub emails, TLS impersonation, live surface enumeration, or Veil.",
         }
     state["capabilities"] = caps
     _save(state)
@@ -378,6 +437,12 @@ def update_capabilities(
 
 
 def revoke() -> dict[str, Any]:
+    try:
+        from app.conduit.runtime import stop_conduit
+
+        stop_conduit()
+    except Exception:
+        pass
     _save(_default_state())
     status = get_status()
     status["ok"] = True

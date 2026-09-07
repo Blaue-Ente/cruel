@@ -77,5 +77,5 @@ def test_rule_plan_gdpr():
 def test_run_copilot_anomalies():
     import asyncio
 
-    result = asyncio.run(run_copilot("What is failing in the system?", execute=True))
+    result = asyncio.run(run_copilot("What is failing in the system?", execute=True, provider="rule"))
     assert result["steps"][0]["tool"] == "spot_anomalies"

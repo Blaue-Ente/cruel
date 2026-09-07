@@ -13,8 +13,9 @@ def test_health_reports_v8_and_secure_admin(client):
     assert r.status_code == 200
     body = r.json()
     assert body["version"].startswith("8.")
-    assert set(body["risk"]) == {"acknowledged", "any_enabled"}
+    assert set(body["risk"]) == {"acknowledged", "any_enabled", "proxy_configured"}
     assert body["risk"]["acknowledged"] is False
+    assert body["risk"]["proxy_configured"] is False
     assert body["security"]["ssrf_protection"] is True
     assert body["security"]["websocket_requires_api_key"] is True
     assert body["security"]["admin_secret_insecure"] is False
@@ -98,6 +99,9 @@ def test_playbook_covers_arsenal():
         "research_verification",
         "flaresolverr",
         "github_commit_emails",
+        "academic",
+        "steering",
+        "authorized_surface_enum",
     ):
         assert key in ids
     swarm = next(e for e in book["entries"] if e["id"] == "swarm")

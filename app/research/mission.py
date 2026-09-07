@@ -15,6 +15,8 @@ ICON = {
     "query_registry": "landmark",
     "wayback_diff": "hourglass",
     "inspect_obstacles": "triangle-alert",
+    "academic_pass": "graduation-cap",
+    "second_origin": "git-branch",
 }
 
 
@@ -47,6 +49,52 @@ def propose_chips(task_id: str, event: str = "onDiscoveryComplete", obstacle: st
     claims = store.list_claims(task_id)
     coverage = task.get("coverage") or {}
     chips: list[dict[str, Any]] = []
+    reflection = coverage.get("reflection") if isinstance(coverage.get("reflection"), dict) else {}
+    gap_ids = {g.get("id") for g in (reflection.get("gaps") or []) if isinstance(g, dict)}
+
+    if "academic" in gap_ids:
+        chips.append(
+            {
+                "id": f"action_academic_{task_id[:8]}",
+                "label": "Academic pass (OpenAlex / arXiv)",
+                "icon": ICON["academic_pass"],
+                "intent": "academic_pass",
+                "target_filter": {"loop": "academic"},
+                "cost_forecast": {
+                    "requests": 1,
+                    "estimated_tokens": 0,
+                    "byok_cost_est": "$0.00",
+                    "note": "Public bibliographic APIs. Hits stay unverified traces.",
+                },
+            }
+        )
+    if "second_origin" in gap_ids:
+        chips.append(
+            {
+                "id": f"action_second_origin_{task_id[:8]}",
+                "label": "Find a second independent origin",
+                "icon": ICON["second_origin"],
+                "intent": "second_origin",
+                "target_filter": {},
+                "cost_forecast": {
+                    "requests": 1,
+                    "estimated_tokens": 0,
+                    "byok_cost_est": "$0.00",
+                    "note": "Another search pass. Mirrors of the same story still share origin_group.",
+                },
+            }
+        )
+    if "registry_url" in gap_ids or "registry_missing" in gap_ids:
+        chips.append(
+            {
+                "id": f"action_query_registry_{task_id[:8]}",
+                "label": "Refresh Registry Pack",
+                "icon": ICON["query_registry"],
+                "intent": "query_registry",
+                "target_filter": {"source_type": "registry"},
+                "cost_forecast": {"requests": 1, "estimated_tokens": 0, "byok_cost_est": "$0.00", "note": "Public registry APIs. A search URL is not a filing."},
+            }
+        )
 
     top = []
     for ent in entities:
@@ -91,16 +139,17 @@ def propose_chips(task_id: str, event: str = "onDiscoveryComplete", obstacle: st
         )
 
     has_registry = any(d.get("source_type") == "registry" and d.get("completeness") != "failed" for d in documents)
-    chips.append(
-        {
-            "id": f"action_query_registry_{task_id[:8]}",
-            "label": "Query Registry Pack" if not has_registry else "Refresh Registry Pack",
-            "icon": ICON["query_registry"],
-            "intent": "query_registry",
-            "target_filter": {"source_type": "registry"},
-            "cost_forecast": {"requests": 1, "estimated_tokens": 0, "byok_cost_est": "$0.00", "note": "Public registry APIs (EDGAR / Companies House / OpenCorporates)."},
-        }
-    )
+    if not any(c.get("intent") == "query_registry" for c in chips):
+        chips.append(
+            {
+                "id": f"action_query_registry_{task_id[:8]}",
+                "label": "Query Registry Pack" if not has_registry else "Refresh Registry Pack",
+                "icon": ICON["query_registry"],
+                "intent": "query_registry",
+                "target_filter": {"source_type": "registry"},
+                "cost_forecast": {"requests": 1, "estimated_tokens": 0, "byok_cost_est": "$0.00", "note": "Public registry APIs (EDGAR / Companies House / OpenCorporates)."},
+            }
+        )
 
     url = next((d.get("url") for d in documents if (d.get("url") or "").startswith("http")), "")
     if url:
@@ -283,6 +332,44 @@ def execute_chip(
         summary["coverage"] = (store.get_task(task_id) or {}).get("coverage")
         summary["pheromones"] = pheromone_map(20)
         summary["telemetry"] = telemetry()
+    elif intent in {"academic_pass", "second_origin"}:
+        from app.research.steering import steer
+
+        loop = "academic" if intent == "academic_pass" else "academic"
+        if intent == "second_origin":
+            from app.research.discovery import ingest_document
+
+            task = store.get_task(task_id)
+            fn = (collectors or {}).get("search")
+            if fn is None:
+                from app.search import search_web
+
+                fn = search_web
+            query = ((task or {}).get("query") or "") + " primary source"
+            hits = fn(query, max_results=4) or []
+            for hit in hits:
+                ingest_document(
+                    task_id,
+                    url=hit.get("url") or "",
+                    title=hit.get("title") or "",
+                    excerpt=hit.get("snippet") or hit.get("title") or "",
+                    source_type="search",
+                    method="search_snippet",
+                    is_snippet=True,
+                    completeness="trace",
+                    errors="Second-origin search is still a trace.",
+                    meta={"chip": chip_id, "intent": "second_origin"},
+                )
+            store.record_tool_run(task_id, "discovery", "search_web", True, requests=1)
+            summary["ran"].append("second_origin")
+            summary["hits"] = len(hits)
+            from app.research.hooks import after_discovery
+
+            after_discovery(task_id)
+        else:
+            looped = steer(task_id, "add_loop", loop=loop, collectors=collectors)
+            summary["ran"].append("academic")
+            summary["loop"] = looped.get("ran")
     else:
         return {"ok": False, "error": f"Unknown chip intent {intent}", "chip": chip}
 

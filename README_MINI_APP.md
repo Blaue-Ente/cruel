@@ -1,8 +1,21 @@
-# ArgosScout v8.2 — Autonomous OSINT & Deep Intelligence OS
+# ArgosScout v8.4 — Dual-layer research OS (Phase A + B)
 
-Self-hosted research workstation: ask a question, get a **cited, compliance-aware dossier**. Copilot executes tools (Apex, search, extract, Wayback, registries, GDPR) instead of chatting in circles.
+Self-hosted research workstation: ask a question, get a **cited, compliance-aware dossier**. Copilot executes tools (Apex, search, extract, Wayback, registries, academic traces, GDPR) instead of chatting in circles.
 
 **North star:** time-to-trusted-insight — seconds from a prompt to sources you can defend.
+
+## v8.4 highlights (Phase A + B)
+
+- **Academic collector** — OpenAlex / Crossref / arXiv bibliographic traces in Layer A (`source_type=academic`). A DOI landing page is not a read full text. No paywall bypass.
+- **Reflection after Discovery** — coverage gaps (academic, second origin, registry URL-only, unverified) become mission chips. Copilot still cannot set `confirmed=true`.
+- **Case file** — forensic export adds a SHA-256 hash manifest, event timeline, and NIST/OSINT discipline map (`collection → examination → analysis → reporting`).
+- **Steering** — pause / resume / skip desk / add academic|registry|archive loop / set Copilot desk. Loops stay Layer A. Verification is never started from steering.
+- **Operator ingest** — paste text/markdown/csv/json/html into the inbox as `operator_upload` traces with a content SHA-256.
+- **Copilot desks** — Synthesist, Registry, Academic, DPO. Prompt + routing only. Same tools, same risk gate, no extra rights.
+- **Risk gate notice v2** — LinkedIn public GET, GitHub commit emails, TLS impersonation, and live authorized surface enumeration require **your HTTP/SOCKS proxy** plus the acceptance phrase and `authorized_use`. FlareSolverr stays BYO sidecar (no extra HTTP proxy). Copilot cannot enable those switches.
+- **Still out of product:** exploit payloads, stealth LinkedIn login, credential stuffing, Cloudflare/Turnstile solver, canvas-noise anti-detect, GitHub-wide person hunt.
+
+Phase C (MCP/SSE) is not in this release.
 
 ## v8 Apex highlights
 
@@ -33,11 +46,14 @@ All of the following are **off until you opt in**. Enabling them is your legal r
 
 | Option | What it actually does | What it does not do |
 |--------|----------------------|---------------------|
-| FlareSolverr | POST to **your** instance (`FLARESOLVERR_URL`, default loopback `:8191`) | No bundled CF/Turnstile solver |
-| TLS impersonate | Optional `curl_cffi` Chrome-like JA3 GET | Not a WAF exploit; still SSRF-gated |
+| FlareSolverr | POST to **your** instance (`FLARESOLVERR_URL`, default loopback `:8191`) | No bundled CF/Turnstile solver; no extra HTTP proxy required |
+| TLS impersonate | Optional `curl_cffi` Chrome-like JA3 GET **via your proxy** | Not a WAF exploit; still SSRF-gated |
 | Fingerprint profiles | Align UA / platform / WebGL / AudioContext; hide `navigator.webdriver` | No canvas noise, not anti-detect-as-a-service |
-| LinkedIn public fetch | Unauthenticated GET; login wall / 999 **fail closed** | No stealth login |
-| GitHub commit emails | Public commits API for a **repo you name**, max 30 | No GitHub-wide person hunt |
+| LinkedIn public fetch | Unauthenticated GET **via your proxy**; login wall / 999 **fail closed** | No stealth login |
+| GitHub commit emails | Public commits API for a **repo you name**, max 30, **via your proxy** | No GitHub-wide person hunt, not credential stuffing |
+| Authorized surface enum | Live Active Probe / HTTP path mapping on a host with `authorized_target=true`, **via your proxy** | No exploit payloads, no auth bypass. Dry-run stays available without this flag |
+
+Set `proxy_url` in Settings after accepting the notice (for example `socks5://127.0.0.1:9050` or an HTTP corporate egress you operate). ArgosScout does not provide stealth infrastructure. You accept all liability.
 
 ```bash
 # After acknowledging in Settings and enabling flaresolverr:
@@ -299,9 +315,17 @@ python3 run_app.py
 - [x] Generated admin secret (no shipped default)
 - [x] Operator risk gate (opt-in FlareSolverr / TLS impersonate / fingerprints / LinkedIn / GitHub emails)
 - [x] Dual-layer Discovery Inbox + optional Verification Center
+- [x] Academic bibliographic pass (OpenAlex / Crossref / arXiv)
+- [x] Post-discovery reflection → mission chips
+- [x] Case timeline + SHA-256 hash manifest
+- [x] Human-in-the-loop steering (pause / skip desk / add loop)
+- [x] Operator file ingest into Layer A
+- [x] Copilot desks (Synthesist / Registry / Academic / DPO)
+- [x] BYO proxy required for high-risk egress (notice v2)
 - [ ] Optional allow-list of scrape hosts for locked-down deployments
+- [ ] Phase C MCP / SSE research streams
 
-**Not shipped as always-on (by design):** Cloudflare challenge bypass, canvas-noise anti-detect, LinkedIn login bypass, GitHub-wide email harvesting. Those exist only behind the operator risk gate, off by default.
+**Not shipped as always-on (by design):** Cloudflare challenge bypass, canvas-noise anti-detect, LinkedIn login bypass, GitHub-wide email harvesting, exploit payloads, credential stuffing. High-risk public fetch / live path mapping exist only behind the operator risk gate **and** a proxy you operate, off by default, with explicit consent.
 
 ## Лиценз
 

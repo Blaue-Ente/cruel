@@ -22,7 +22,7 @@ from app.config import (
     admin_secret_is_insecure,
 )
 from app.compliance.policy import PolicyEngine, get_policy_status
-from app.compliance.risk_gate import RiskCapabilityOff, get_status as get_risk_status
+from app.compliance.risk_gate import ProxyRequired, RiskCapabilityOff, get_status as get_risk_status
 from app.compliance.gdpr_gate import apply_gdpr_gate, scan_for_pii
 from app.compliance.layers import list_layers, resolve_layer
 from app.seo_autopsy import seo_autopsy
@@ -158,6 +158,11 @@ async def risk_cap_handler(_request, exc: RiskCapabilityOff):
     return JSONResponse(status_code=403, content={"detail": str(exc), "capability": exc.capability})
 
 
+@app.exception_handler(ProxyRequired)
+async def proxy_required_handler(_request, exc: ProxyRequired):
+    return JSONResponse(status_code=403, content={"detail": str(exc), "capability": exc.capability, "proxy_required": True})
+
+
 @app.get("/")
 async def root():
     return FileResponse(static_dir / "index.html")
@@ -194,6 +199,7 @@ async def health():
         "risk": {
             "acknowledged": risk["acknowledged"],
             "any_enabled": risk["any_enabled"],
+            "proxy_configured": bool(risk.get("proxy_configured")),
         },
         "research": {
             "layers_enabled": RESEARCH_LAYERS_ENABLED,
@@ -352,6 +358,10 @@ async def api_active_probe(body: ProbeRequest, _key: dict = Depends(require_api_
             status_code=400,
             detail="Live probe requires authorized_target=true — confirm you may test this host.",
         )
+    if not body.dry_run:
+        from app.compliance.risk_gate import require_capability
+
+        require_capability("authorized_surface_enum")
     try:
         result = await run_active_probe(
             str(body.url),
@@ -574,7 +584,12 @@ async def api_risk_status(_key: dict = Depends(require_api_key)):
 async def api_risk_ack(body: RiskAcknowledgeRequest, _key: dict = Depends(require_api_key)):
     from app.compliance.risk_gate import acknowledge
 
-    result = acknowledge(body.phrase, authorized_use=body.authorized_use, capabilities=body.capabilities)
+    result = acknowledge(
+        body.phrase,
+        authorized_use=body.authorized_use,
+        capabilities=body.capabilities,
+        proxy_url=body.proxy_url or "",
+    )
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result.get("error") or "Acknowledgment rejected")
     return result
@@ -584,9 +599,11 @@ async def api_risk_ack(body: RiskAcknowledgeRequest, _key: dict = Depends(requir
 async def api_risk_caps(body: RiskCapabilitiesRequest, _key: dict = Depends(require_api_key)):
     from app.compliance.risk_gate import update_capabilities
 
-    result = update_capabilities(body.capabilities)
+    result = update_capabilities(body.capabilities, proxy_url=body.proxy_url)
     if not result.get("ok"):
-        raise HTTPException(status_code=403, detail=result.get("error") or "Not acknowledged")
+        err = result.get("error") or "Not acknowledged"
+        status = 400 if "proxy" in err.lower() else 403
+        raise HTTPException(status_code=status, detail=err)
     return result
 
 

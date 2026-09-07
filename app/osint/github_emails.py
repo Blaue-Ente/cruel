@@ -59,6 +59,7 @@ def public_commit_emails(owner: str, repo: str, *, limit: int = 20) -> dict[str,
             timeout=12,
             headers=_headers(),
             params={"per_page": limit},
+            use_operator_proxy=True,
         )
         if resp.status_code >= 400:
             return {"ok": False, "status": resp.status_code, "error": "GitHub commits API error"}
@@ -87,7 +88,7 @@ def public_commit_emails(owner: str, repo: str, *, limit: int = 20) -> dict[str,
             "repo": repo,
             "count": len(authors),
             "authors": authors,
-            "note": "Public commit metadata via GitHub API. Personal data — use only with a lawful basis.",
+            "note": "Public commit metadata via GitHub API through your proxy. Personal data — use only with a lawful basis.",
         }
     except Exception as exc:
         return {"ok": False, "error": str(exc)}

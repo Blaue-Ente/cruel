@@ -34,7 +34,7 @@ def fetch_linkedin_public(url: str) -> dict[str, Any]:
     if not _is_linkedin(url):
         return {"ok": False, "error": "URL is not linkedin.com"}
     try:
-        resp = safe_get(url, timeout=12)
+        resp = safe_get(url, timeout=12, use_operator_proxy=True)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
     text = resp.text or ""
@@ -62,5 +62,5 @@ def fetch_linkedin_public(url: str) -> dict[str, Any]:
         "title": title[:300],
         "json_ld_blocks": len(json_ld),
         "json_ld_preview": json_ld[:2],
-        "note": "Unauthenticated public HTML only. No session, no stealth login.",
+        "note": "Unauthenticated public HTML only, via your proxy. No session, no stealth login.",
     }

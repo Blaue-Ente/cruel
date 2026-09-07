@@ -7,6 +7,7 @@ import pytest
 from app.browser.fingerprint import fingerprint_init_script
 from app.compliance.risk_gate import (
     CAPABILITIES,
+    NOTICE_VERSION,
     acknowledge,
     get_notice,
     get_status,
@@ -15,6 +16,7 @@ from app.compliance.risk_gate import (
     revoke,
     RiskCapabilityOff,
     update_capabilities,
+    validate_proxy_url,
 )
 from app.http_impersonate import impersonate_get
 from app.osint.github_emails import parse_repo, public_commit_emails
@@ -45,8 +47,12 @@ def test_notice_is_public_shaped():
     notice = get_notice()
     assert "FlareSolverr" in notice["notice_en"]
     assert "ПРИЕМАМ РИСКА" in notice["phrases_accepted"]
+    assert notice["notice_version"] == 2
+    assert NOTICE_VERSION == 2
     ids = {c["id"] for c in notice["capabilities"]}
     assert ids == set(CAPABILITIES)
+    assert "authorized_surface_enum" in ids
+    assert "linkedin_public_fetch" in notice["proxy_required_for"]
 
 
 def test_ack_rejects_wrong_phrase():
@@ -67,10 +73,18 @@ def test_ack_english_then_enable_one_flag():
     assert result["acknowledged"] is True
     assert result["any_enabled"] is False
     assert is_enabled("tls_impersonate") is False
-    updated = update_capabilities({"tls_impersonate": True, "flaresolverr": False})
+    no_proxy = update_capabilities({"tls_impersonate": True, "flaresolverr": False})
+    assert no_proxy["ok"] is False
+    assert is_enabled("tls_impersonate") is False
+    updated = update_capabilities(
+        {"tls_impersonate": True, "flaresolverr": False},
+        proxy_url="socks5://127.0.0.1:9050",
+    )
     assert updated["ok"] is True
     assert is_enabled("tls_impersonate") is True
     assert is_enabled("flaresolverr") is False
+    assert updated["proxy_configured"] is True
+    assert updated["proxy_redacted"] == "socks5://127.0.0.1:9050"
 
 
 def test_ack_bulgarian_phrase():
@@ -86,11 +100,17 @@ def test_update_caps_before_ack_fails():
 
 
 def test_revoke_clears_everything():
-    acknowledge("I ACCEPT THE RISK", authorized_use=True, capabilities={"github_commit_emails": True})
+    acknowledge(
+        "I ACCEPT THE RISK",
+        authorized_use=True,
+        capabilities={"github_commit_emails": True},
+        proxy_url="socks5://127.0.0.1:9050",
+    )
     assert is_enabled("github_commit_emails") is True
     revoke()
     assert is_enabled("github_commit_emails") is False
     assert get_status()["acknowledged"] is False
+    assert get_status()["proxy_configured"] is False
 
 
 def test_ack_file_mode_600(isolated_risk_ack):
@@ -98,7 +118,7 @@ def test_ack_file_mode_600(isolated_risk_ack):
     mode = isolated_risk_ack.stat().st_mode & 0o777
     assert mode == 0o600
     payload = json.loads(isolated_risk_ack.read_text())
-    assert payload["notice_version"] == 1
+    assert payload["notice_version"] == 2
 
 
 def test_disabled_clients_do_not_call_out():
@@ -127,9 +147,10 @@ def test_health_risk_summary_hides_flags(client):
     r = client.get("/health")
     assert r.status_code == 200
     risk = r.json()["risk"]
-    assert set(risk) == {"acknowledged", "any_enabled"}
+    assert set(risk) == {"acknowledged", "any_enabled", "proxy_configured"}
     assert risk["acknowledged"] is False
     assert risk["any_enabled"] is False
+    assert risk["proxy_configured"] is False
     dumped = json.dumps(risk)
     assert "flaresolverr" not in dumped
     assert "linkedin" not in dumped
@@ -205,8 +226,17 @@ def test_high_risk_apis_403_until_enabled(client, api_key):
         headers=headers,
         json={"capabilities": {"github_commit_emails": True}},
     )
+    assert caps.status_code == 400
+    assert "proxy" in (caps.json().get("detail") or "").lower()
+
+    caps = client.post(
+        "/api/v1/compliance/risk/capabilities",
+        headers=headers,
+        json={"capabilities": {"github_commit_emails": True}, "proxy_url": "socks5://127.0.0.1:9050"},
+    )
     assert caps.status_code == 200
     assert caps.json()["capabilities"]["github_commit_emails"] is True
+    assert caps.json()["proxy_configured"] is True
 
     missing = client.post("/api/v1/osint/github-emails", headers=headers, json={})
     assert missing.status_code == 400
@@ -219,3 +249,46 @@ def test_high_risk_apis_403_until_enabled(client, api_key):
         json={"owner": "octocat", "repo": "Hello-World"},
     )
     assert again.status_code == 403
+
+
+def test_proxy_url_validation():
+    assert validate_proxy_url("socks5://127.0.0.1:9050") == "socks5://127.0.0.1:9050"
+    assert validate_proxy_url("http://127.0.0.1:8080") == "http://127.0.0.1:8080"
+    assert validate_proxy_url("") == ""
+    with pytest.raises(ValueError):
+        validate_proxy_url("ftp://127.0.0.1:21")
+    with pytest.raises(ValueError):
+        validate_proxy_url("socks5://127.0.0.1:9050/secret")
+
+
+def test_stale_v1_ack_does_not_count(isolated_risk_ack):
+    isolated_risk_ack.write_text(
+        json.dumps(
+            {
+                "notice_version": 1,
+                "acknowledged": True,
+                "authorized_use": True,
+                "capabilities": {"tls_impersonate": True},
+                "proxy_url": "socks5://127.0.0.1:9050",
+            }
+        ),
+        encoding="utf-8",
+    )
+    status = get_status()
+    assert status["acknowledged"] is False
+    assert is_enabled("tls_impersonate") is False
+
+
+def test_clearing_proxy_while_egress_on_fails():
+    acknowledge(
+        "I ACCEPT THE RISK",
+        authorized_use=True,
+        capabilities={"linkedin_public_fetch": True},
+        proxy_url="socks5://127.0.0.1:9050",
+    )
+    assert is_enabled("linkedin_public_fetch") is True
+    denied = update_capabilities({"linkedin_public_fetch": True}, proxy_url="")
+    assert denied["ok"] is False
+    assert is_enabled("linkedin_public_fetch") is True
+    with pytest.raises(RiskCapabilityOff):
+        require_capability("authorized_surface_enum")

@@ -50,7 +50,7 @@
         <button class="icon-btn" id="btn-locale" title="Language">EN</button>
         <button class="icon-btn" id="btn-playbook" title="Feature Inspector">📘</button>
         <button class="icon-btn" id="btn-shortcuts" title="Shortcuts">?</button>
-        <span class="badge badge-green">v8.3</span>
+        <span class="badge badge-green">v8.4</span>
       </div>
     </header>
 
@@ -257,6 +257,16 @@
                     <option value="discover_then_verify">Discover → Verify</option>
                   </select>
                 </div>
+                <div>
+                  <label>Copilot desk</label>
+                  <select id="research-desk">
+                    <option value="">Default</option>
+                    <option value="synthesist">Synthesist</option>
+                    <option value="registry">Registry</option>
+                    <option value="academic">Academic</option>
+                    <option value="dpo">DPO</option>
+                  </select>
+                </div>
               </div>
               <div class="toggle-row">
                 <input type="checkbox" id="research-people" />
@@ -265,6 +275,9 @@
               <p id="research-forecast" class="muted-sm">Forecast loads after you pick a mode.</p>
               <div class="row">
                 <button class="btn btn-primary" id="btn-research-run" type="button">Discover</button>
+                <button class="btn btn-secondary" id="btn-research-pause" type="button">Pause</button>
+                <button class="btn btn-secondary" id="btn-research-resume" type="button">Resume</button>
+                <button class="btn btn-secondary" id="btn-research-loop" type="button">Add academic loop</button>
                 <button class="btn btn-secondary" id="btn-research-cancel" type="button">Cancel</button>
                 <select id="research-export-format" aria-label="Export format">
                   <option value="json">Export JSON (Raw)</option>
@@ -317,8 +330,17 @@
               <option value="search">Search traces</option>
               <option value="registry">Registries</option>
               <option value="archive">Archives</option>
+              <option value="academic">Academic</option>
+              <option value="operator_upload">Operator upload</option>
               <option value="people">People</option>
             </select>
+          </div>
+          <div id="research-gaps" class="research-list" style="margin-bottom:.7rem"></div>
+          <label>Paste a note / filing (Layer A trace)</label>
+          <textarea id="research-ingest-text" placeholder="Operator-supplied text is stored unverified. Verification is not started." rows="3"></textarea>
+          <div class="row" style="margin:.5rem 0 .8rem">
+            <input type="text" id="research-ingest-name" placeholder="filename.txt" />
+            <button class="btn btn-secondary" id="btn-research-ingest" type="button">Ingest as trace</button>
           </div>
           <div id="research-inbox" class="research-list"><div class="empty-state">No materials yet. Run Discovery.</div></div>
         </div>
@@ -706,7 +728,7 @@
           <div class="card-header">High-risk fetches (off until Settings notice)</div>
           <div class="card-body">
             <p class="muted-sm" style="margin-bottom:1rem">
-              These stay disabled until you read the operator notice in Settings, type the acceptance phrase, and enable the matching switch. APIs return 403 otherwise. You accept all liability.
+              These stay disabled until you read the operator notice in Settings, type the acceptance phrase, set YOUR HTTP/SOCKS proxy, and enable the matching switch. APIs return 403 otherwise. You accept all liability. No exploits, stealth login, or credential stuffing.
             </p>
             <label>FlareSolverr target URL</label>
             <div class="row">
@@ -856,11 +878,15 @@
               <div id="risk-status-line" class="muted-sm" style="margin-bottom:.75rem">All high-risk options are off until you read and accept the notice.</div>
               <button class="btn btn-secondary" id="btn-risk-notice" type="button">Read notice &amp; accept risk</button>
               <div id="risk-toggles" class="hidden" style="margin-top:1rem">
+                <label>Your HTTP/SOCKS proxy (required for LinkedIn, GitHub emails, TLS impersonation, live surface enum)</label>
+                <input type="text" id="risk-proxy" placeholder="socks5://127.0.0.1:9050" autocomplete="off" />
+                <p id="risk-proxy-line" class="muted-sm">No proxy configured. Egress options stay off until you set one you operate.</p>
                 <div class="toggle-row"><input type="checkbox" id="risk-flaresolverr" /><label for="risk-flaresolverr" style="margin:0">FlareSolverr (BYO instance)</label></div>
-                <div class="toggle-row"><input type="checkbox" id="risk-tls" /><label for="risk-tls" style="margin:0">TLS/JA3 impersonation (curl_cffi)</label></div>
+                <div class="toggle-row"><input type="checkbox" id="risk-tls" /><label for="risk-tls" style="margin:0">TLS/JA3 impersonation (curl_cffi) — requires proxy</label></div>
                 <div class="toggle-row"><input type="checkbox" id="risk-fingerprint" /><label for="risk-fingerprint" style="margin:0">Canvas / WebGL / Audio profiles</label></div>
-                <div class="toggle-row"><input type="checkbox" id="risk-linkedin" /><label for="risk-linkedin" style="margin:0">LinkedIn public fetch (no login bypass)</label></div>
-                <div class="toggle-row"><input type="checkbox" id="risk-github" /><label for="risk-github" style="margin:0">GitHub public commit emails</label></div>
+                <div class="toggle-row"><input type="checkbox" id="risk-linkedin" /><label for="risk-linkedin" style="margin:0">LinkedIn public fetch via your proxy (no login bypass)</label></div>
+                <div class="toggle-row"><input type="checkbox" id="risk-github" /><label for="risk-github" style="margin:0">GitHub public commit emails via your proxy</label></div>
+                <div class="toggle-row"><input type="checkbox" id="risk-surface" /><label for="risk-surface" style="margin:0">Authorized HTTP surface enumeration (live probe, no exploits) — requires proxy</label></div>
                 <button class="btn btn-primary" id="btn-risk-save-caps" type="button">Save high-risk switches</button>
                 <button class="btn btn-danger" id="btn-risk-revoke" type="button">Revoke acknowledgment</button>
               </div>
@@ -909,6 +935,13 @@
   <aside class="copilot-dock" id="copilot-dock" aria-label="Copilot">
     <div class="copilot-head">
       <strong>Copilot</strong>
+      <select id="copilot-desk" aria-label="Copilot desk" style="max-width:11rem">
+        <option value="">Desk: default</option>
+        <option value="synthesist">Synthesist</option>
+        <option value="registry">Registry</option>
+        <option value="academic">Academic</option>
+        <option value="dpo">DPO</option>
+      </select>
       <button class="icon-btn" id="btn-copilot-close" type="button">✕</button>
     </div>
     <div id="copilot-context" class="copilot-ctx">Loading context…</div>
@@ -967,7 +1000,7 @@
       </div>
       <label>Type <code>I ACCEPT THE RISK</code> or <code>ПРИЕМАМ РИСКА</code></label>
       <input type="text" id="risk-phrase" autocomplete="off" />
-      <p class="muted-sm">Switches stay off until you enable them after this step.</p>
+      <p class="muted-sm">Switches stay off until you enable them after this step. High-risk egress also needs YOUR proxy (set it in Settings).</p>
       <button class="btn btn-primary" id="btn-risk-accept" type="button">Accept and continue</button>
     </div>
   </div>

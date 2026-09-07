@@ -229,6 +229,9 @@ def tool_research_discover(
     include_people: bool = False,
     privacy_layer: str = "",
     country: str = "",
+    skip_desks: Optional[list[str]] = None,
+    extra_loops: Optional[list[str]] = None,
+    desk: str = "",
 ) -> dict[str, Any]:
     from app.research.discovery import run_discovery
 
@@ -239,6 +242,9 @@ def tool_research_discover(
         privacy_layer=privacy_layer,
         country=country,
         include_people=bool(include_people),
+        skip_desks=skip_desks or None,
+        extra_loops=extra_loops or None,
+        desk=desk or "",
     )
     return {
         "task_id": pack["task"]["id"],
@@ -489,6 +495,9 @@ TOOL_SPECS: list[ToolSpec] = [
                 "include_people": {"type": "boolean"},
                 "privacy_layer": {"type": "string"},
                 "country": {"type": "string"},
+                "skip_desks": {"type": "array", "items": {"type": "string"}},
+                "extra_loops": {"type": "array", "items": {"type": "string"}},
+                "desk": {"type": "string"},
             },
             "required": ["query"],
         },

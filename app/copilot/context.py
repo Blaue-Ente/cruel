@@ -66,6 +66,7 @@ def get_runtime_context() -> dict[str, Any]:
         "risk": {
             "acknowledged": risk["acknowledged"],
             "any_enabled": risk["any_enabled"],
+            "proxy_configured": bool(risk.get("proxy_configured")),
             "capabilities": risk["capabilities"],
         },
         "research": {

@@ -45,6 +45,7 @@ async def copilot_run(
         model=body.llm_model,
         privacy_layer=body.privacy_layer,
         country=body.country,
+        desk=body.desk or "",
     )
     request_id = getattr(request.state, "request_id", "")
     log_telemetry(

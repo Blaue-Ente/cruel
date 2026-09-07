@@ -10,6 +10,44 @@ from app.research.schema import ANNEX_DISCLAIMER, UNVERIFIED_BANNER
 from app.research.snapshots import compare_tasks, layer_hashes
 from app.research.verification import report
 from app.research import store
+import hashlib
+
+
+NIST_OSINT_MAP = {
+    "collection": "Layer A Discovery — public traces, registries, archives, academic bibliographic hits, operator uploads.",
+    "examination": "Layer B Verification — optional, scoped, never a single truth score.",
+    "analysis": "Synthesist desk: origin_group collapses republication; people are not merged by name.",
+    "reporting": "Portable case export with hash manifest, timeline, and unverified annex.",
+}
+
+
+def hash_manifest(task_id: str) -> dict[str, Any]:
+    items = []
+    for doc in store.list_documents(task_id):
+        items.append(
+            {
+                "id": doc["id"],
+                "sha256": doc.get("content_hash") or "",
+                "source_type": doc.get("source_type"),
+                "title": doc.get("title"),
+                "url": doc.get("url") or "",
+                "verification_status": doc.get("verification_status"),
+            }
+        )
+    joined = "|".join(sorted((i["sha256"] or "") + ":" + i["id"] for i in items))
+    return {
+        "algorithm": "sha256",
+        "case_hash": hashlib.sha256(joined.encode("utf-8")).hexdigest(),
+        "item_count": len(items),
+        "items": items,
+    }
+
+
+def case_timeline(task_id: str) -> list[dict[str, Any]]:
+    return [
+        {"at": ev.get("created_at"), "stage": ev.get("stage"), "message": ev.get("message")}
+        for ev in store.list_events(task_id)
+    ]
 
 
 def export_task(task_id: str, fmt: str = "json") -> dict[str, Any]:
@@ -26,6 +64,14 @@ def export_task(task_id: str, fmt: str = "json") -> dict[str, Any]:
         "note": "Do not treat unverified materials as facts. Secrets are redacted.",
     }
     pack["dossier"] = dossier
+    pack["case"] = {
+        "classification": "INTERNAL USE / OSINT COMPLIANT",
+        "discipline": NIST_OSINT_MAP,
+        "timeline": case_timeline(task_id),
+        "hash_manifest": hash_manifest(task_id),
+        "banner": UNVERIFIED_BANNER,
+        "annex_disclaimer": ANNEX_DISCLAIMER,
+    }
     if fmt == "markdown":
         pack["markdown"] = render_markdown(dossier)
     if fmt == "html":
